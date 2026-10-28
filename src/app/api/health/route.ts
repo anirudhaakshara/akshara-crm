@@ -16,7 +16,7 @@ export async function GET() {
         database: "connected",
         timestamp: new Date().toISOString(),
         latencyMs: latency,
-        version: "0.1.0",
+        version: "0.2.0",
       },
       { status: 200 }
     );
