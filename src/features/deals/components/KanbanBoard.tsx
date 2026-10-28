@@ -24,6 +24,7 @@ import { formatDate, formatINR, formatINRCompact } from "@/lib/formatters";
 import { STAGE_LABELS, type DealStageValue } from "@/features/deals/schemas/deal";
 import { STAGE_ACCENTS } from "@/features/deals/components/StageBadge";
 import type { BoardColumn, DealRecord } from "@/features/deals/types";
+import { WinScoreBadge } from "@/features/ml/components/WinScoreBadge";
 
 interface KanbanBoardProps {
   columns: BoardColumn[];
@@ -51,7 +52,10 @@ function DealCardBody({ deal, showOwner, dragging }: { deal: DealRecord; showOwn
         </Link>
         <GripVertical className="h-3.5 w-3.5 shrink-0 text-muted-foreground/50" aria-hidden />
       </div>
-      <div className="text-sm font-bold text-foreground">{formatINR(deal.value)}</div>
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-sm font-bold text-foreground">{formatINR(deal.value)}</span>
+        <WinScoreBadge stage={deal.stage} winProbability={deal.winProbability} scoreFactors={deal.scoreFactors} />
+      </div>
       <div className="space-y-0.5 text-[11px] text-muted-foreground">
         {deal.contact && (
           <p className="truncate">

@@ -20,6 +20,7 @@ import { KanbanBoard } from "@/features/deals/components/KanbanBoard";
 import { DealDialog } from "@/features/deals/components/DealDialog";
 import { LostReasonDialog } from "@/features/deals/components/LostReasonDialog";
 import { StageBadge } from "@/features/deals/components/StageBadge";
+import { WinScoreBadge } from "@/features/ml/components/WinScoreBadge";
 import type { BoardColumn, DealRecord } from "@/features/deals/types";
 
 const PAGE_SIZE = 10;
@@ -238,6 +239,17 @@ function DealsPageInner() {
       cell: (row) => <span className="font-semibold whitespace-nowrap">{formatINR(row.value)}</span>,
     },
     { id: "stage", header: "Stage", sortable: true, cell: (row) => <StageBadge stage={row.stage} /> },
+    {
+      id: "winProbability",
+      header: "Win Score",
+      sortable: true,
+      cell: (row) =>
+        row.stage === "WON" || row.stage === "LOST" ? (
+          <span className="text-[11px] text-muted-foreground">—</span>
+        ) : (
+          <WinScoreBadge stage={row.stage} winProbability={row.winProbability} scoreFactors={row.scoreFactors} />
+        ),
+    },
     {
       id: "expectedCloseDate",
       header: "Expected Close",

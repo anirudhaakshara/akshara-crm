@@ -1,4 +1,5 @@
 import type { DealStageValue } from "@/features/deals/schemas/deal";
+import type { StoredScoreFactors } from "@/features/ml/types";
 
 export interface DealRecord {
   id: string;
@@ -12,6 +13,7 @@ export interface DealRecord {
   companyId: string | null;
   ownerId: string;
   winProbability: number | null;
+  scoreFactors?: StoredScoreFactors | null;
   createdAt: string;
   updatedAt: string;
   contact: { id: string; firstName: string; lastName: string } | null;

@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - Phase 3: ML Insights & Dashboard
+
+### Added
+- **Logistic regression from scratch** (`src/lib/ml/logisticRegression.ts`): z-score normalisation, batch gradient descent, L2 regularisation; pure, fully typed functions.
+- **Feature engineering** (`src/lib/ml/features.ts`): log deal value, activities in last 14 days, total activities, days since last activity, deal age, meeting count, contact source one-hot, company industry one-hot (top 5 + OTHER). Closed deals are measured as of `closedAt` (no leakage).
+- **Training**: stratified 80/20 split with fixed seed, metrics (accuracy, precision, recall, ROC AUC, confusion matrix, 5-fold CV) stored on `ModelVersion`; new version marked active. Triggered by `npm run train` or the admin-only `POST /api/ml/train`.
+- **Inference on change**: open deals are rescored when a deal is created/updated or an activity on it is created/edited/deleted, and all open deals after each training run. `winProbability` and per-factor contributions are stored on the deal.
+- **Hot / Warm / Cold badges** (≥70% / 40–69% / <40%) on Kanban cards, the deals table (sortable “Win Score” column), deal and contact pages, with a tooltip listing the top 3 helping and hurting factors in plain English (e.g. “2 meetings held +12%”). “Not enough data” fallback when no model exists or fewer than 30 closed deals.
+- **Deal page “Win Probability” panel** with every factor's impact.
+- **Model Insights page** (`/ml/insights`, admin): active version, trained date, test and cross-validated metrics, confusion matrix, feature-importance bar chart, recent versions, Retrain button. `GET /api/ml/model`.
+- **Revenue forecast**: expected revenue for this and next month from the probability-weighted pipeline; linear trend on 12 months of won revenue projected 3 months ahead.
+- **Dashboard** (post-login home) backed by `GET /api/dashboard/stats` (all DB aggregates, role-scoped): KPI cards (open pipeline, weighted pipeline, won this month, win rate, open and overdue tasks), won-revenue actual vs projected chart, pipeline by stage, leads by source, my tasks due today/overdue, recent activity. Every chart has hover tooltips and a “View as table” fallback.
+- **Vitest** suite (33 tests): convergence on a separable toy dataset, regularisation, metrics/AUC, stratified split and k-fold, feature engineering and labels, IST month maths, expected revenue and trend projection.
+
+### Changed
+- Task “overdue” now uses the start of today in IST on the server, matching the dashboard and the browser.
+
+### Known limitations
+- Stage ordinal is not a model feature (no stage history in the schema; closed deals only carry the label). See README → ML Notes.
+
 ## [0.2.0] - Phase 2: Core CRM Modules
 
 ### Added

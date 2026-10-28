@@ -10,6 +10,7 @@ import {
 import { dealUpdateSchema } from "@/features/deals/schemas/deal";
 import { dealListInclude, stageTransitionData } from "@/features/deals/server/queries";
 import { apiError, apiSuccess, handleApiError } from "@/lib/api-response";
+import { safeRescoreDeal } from "@/features/ml/server/inference";
 
 export const dynamic = "force-dynamic";
 
@@ -116,7 +117,9 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       include: dealListInclude,
     });
 
-    return apiSuccess(updated);
+    // Value, stage, contact or company can all change the score.
+    const score = await safeRescoreDeal(updated.id);
+    return apiSuccess({ ...updated, ...(score ?? {}) });
   } catch (error) {
     if (error instanceof NextResponse) return error;
     return handleApiError(error);

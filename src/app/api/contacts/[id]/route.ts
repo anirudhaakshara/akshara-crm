@@ -31,6 +31,7 @@ export async function GET(
             stage: true,
             expectedCloseDate: true,
             winProbability: true,
+            scoreFactors: true,
           },
         },
         activities: {

@@ -3,6 +3,7 @@ import prisma from "@/lib/prisma";
 import { requireUser, AuthenticatedUser } from "@/features/auth/server/permissions";
 import { activitySchema } from "@/features/activities/schemas/activity";
 import { apiSuccess, handleApiError, apiError } from "@/lib/api-response";
+import { safeRescoreDeal } from "@/features/ml/server/inference";
 
 export const dynamic = "force-dynamic";
 
@@ -70,6 +71,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       include,
     });
 
+    await safeRescoreDeal(updated.dealId);
     return apiSuccess(updated);
   } catch (error) {
     if (error instanceof NextResponse) return error;
@@ -87,6 +89,7 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
     }
 
     await prisma.activity.delete({ where: { id: params.id } });
+    await safeRescoreDeal(existing.dealId);
     return apiSuccess({ deleted: true, id: params.id });
   } catch (error) {
     if (error instanceof NextResponse) return error;

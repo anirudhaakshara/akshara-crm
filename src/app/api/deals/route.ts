@@ -10,10 +10,11 @@ import { dealSchema } from "@/features/deals/schemas/deal";
 import { buildDealWhere, dealListInclude, stageTransitionData } from "@/features/deals/server/queries";
 import { apiError, apiSuccess, handleApiError } from "@/lib/api-response";
 import { parseListParams, paginationMeta } from "@/lib/pagination";
+import { safeRescoreDeal } from "@/features/ml/server/inference";
 
 export const dynamic = "force-dynamic";
 
-const SORT_FIELDS = ["title", "value", "stage", "expectedCloseDate", "closedAt", "createdAt", "updatedAt"] as const;
+const SORT_FIELDS = ["title", "value", "stage", "expectedCloseDate", "closedAt", "createdAt", "updatedAt", "winProbability"] as const;
 const STAGE_ORDER = Object.values(DealStage);
 
 /**
@@ -75,7 +76,11 @@ export async function GET(req: NextRequest) {
         where,
         skip,
         take: limit,
-        orderBy: { [sortBy]: sortOrder },
+        // Unscored deals (closed / not enough data) always sort last when ordering by score.
+        orderBy:
+          sortBy === "winProbability"
+            ? [{ winProbability: { sort: sortOrder, nulls: "last" } }, { id: "asc" }]
+            : [{ [sortBy]: sortOrder }, { id: "asc" }],
         include: dealListInclude,
       }),
       prisma.deal.count({ where }),
@@ -141,7 +146,8 @@ export async function POST(req: NextRequest) {
       include: dealListInclude,
     });
 
-    return apiSuccess(deal, 201);
+    const score = await safeRescoreDeal(deal.id);
+    return apiSuccess({ ...deal, ...(score ?? {}) }, 201);
   } catch (error) {
     if (error instanceof NextResponse) return error;
     return handleApiError(error);

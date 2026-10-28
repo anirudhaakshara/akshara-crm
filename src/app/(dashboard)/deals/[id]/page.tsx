@@ -14,6 +14,7 @@ import {
   CheckSquare,
   ChevronLeft,
   Edit2,
+  Gauge,
   Kanban,
   Loader2,
   Mail,
@@ -27,7 +28,7 @@ import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/feedback/ConfirmDialog";
 import { useToast } from "@/components/feedback/Toast";
 import { apiFetch, errorMessage } from "@/lib/api-client";
-import { formatDate, formatINR } from "@/lib/formatters";
+import { formatDate, formatDateTime, formatINR } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
 import { useCompanyOptions, useContactOptions, useUserOptions } from "@/hooks/useOptions";
 import { ActivityModal } from "@/features/activities/components/ActivityModal";
@@ -37,6 +38,9 @@ import { LostReasonDialog } from "@/features/deals/components/LostReasonDialog";
 import { StageBadge } from "@/features/deals/components/StageBadge";
 import { DEAL_STAGES, STAGE_LABELS, type DealStageValue } from "@/features/deals/schemas/deal";
 import type { DealRecord } from "@/features/deals/types";
+import { WinScoreBadge } from "@/features/ml/components/WinScoreBadge";
+import { formatImpact } from "@/lib/ml/explain";
+import { scoreBand } from "@/features/ml/types";
 import { TaskDialog } from "@/features/tasks/components/TaskDialog";
 import { TaskList } from "@/features/tasks/components/TaskList";
 import type { TaskRecord } from "@/features/tasks/types";
@@ -128,7 +132,18 @@ export default function DealDetailPage() {
         method: "PATCH",
         body: JSON.stringify({ stage, ...(lostReason ? { lostReason } : {}) }),
       });
-      setDeal((d) => (d ? { ...d, stage: updated.stage, closedAt: updated.closedAt, lostReason: updated.lostReason } : d));
+      setDeal((d) =>
+        d
+          ? {
+              ...d,
+              stage: updated.stage,
+              closedAt: updated.closedAt,
+              lostReason: updated.lostReason,
+              winProbability: updated.winProbability,
+              scoreFactors: updated.scoreFactors,
+            }
+          : d
+      );
       toast.success(`Stage changed to ${STAGE_LABELS[stage]}`);
     } catch (err) {
       setDeal(previous);
@@ -193,6 +208,7 @@ export default function DealDetailPage() {
             <div className="flex items-center gap-2.5 flex-wrap">
               <h1 className="text-2xl font-bold tracking-tight text-foreground">{deal.title}</h1>
               <StageBadge stage={deal.stage} />
+              <WinScoreBadge stage={deal.stage} winProbability={deal.winProbability} scoreFactors={deal.scoreFactors} />
             </div>
             <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-muted-foreground">
               {deal.company && (
@@ -285,6 +301,50 @@ export default function DealDetailPage() {
         </div>
 
         <div className="space-y-6">
+          {!isClosed && (
+            <Panel icon={Gauge} title="Win Probability">
+              {deal.winProbability === null ? (
+                <p className="text-xs text-muted-foreground">
+                  Not enough data yet. Scores appear once an admin trains the model on at least 30 closed deals.
+                </p>
+              ) : (
+                <div className="space-y-3">
+                  <div>
+                    <div className="flex items-baseline justify-between">
+                      <span className="text-2xl font-bold tabular-nums">{Math.round(deal.winProbability * 100)}%</span>
+                      <span className="text-[11px] text-muted-foreground">
+                        {{ HOT: "Hot", WARM: "Warm", COLD: "Cold" }[scoreBand(deal.winProbability)]}
+                      </span>
+                    </div>
+                    <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-muted" aria-hidden>
+                      <div className="h-full rounded-full bg-primary" style={{ width: `${Math.round(deal.winProbability * 100)}%` }} />
+                    </div>
+                  </div>
+                  <ul className="space-y-1">
+                    {(deal.scoreFactors?.factors ?? [])
+                      .filter((f) => Math.abs(f.impact) >= 0.05)
+                      .map((f) => (
+                        <li key={f.group} className="flex items-center justify-between gap-3 text-xs">
+                          <span className="text-muted-foreground">{f.label}</span>
+                          <span
+                            className={cn(
+                              "font-semibold tabular-nums",
+                              f.impact > 0 ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"
+                            )}
+                          >
+                            {formatImpact(f.impact)}
+                          </span>
+                        </li>
+                      ))}
+                  </ul>
+                  {deal.scoreFactors?.scoredAt && (
+                    <p className="text-[10px] text-muted-foreground">Updated {formatDateTime(deal.scoreFactors.scoredAt)}</p>
+                  )}
+                </div>
+              )}
+            </Panel>
+          )}
+
           {deal.contact && (
             <Panel icon={User} title="Contact">
               <div className="space-y-1.5 text-xs">

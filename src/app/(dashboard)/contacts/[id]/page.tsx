@@ -40,6 +40,8 @@ import { ActivityTimeline, ActivityItem } from "@/features/activities/components
 import { DealDialog } from "@/features/deals/components/DealDialog";
 import { StageBadge } from "@/features/deals/components/StageBadge";
 import type { DealStageValue } from "@/features/deals/schemas/deal";
+import { WinScoreBadge } from "@/features/ml/components/WinScoreBadge";
+import type { StoredScoreFactors } from "@/features/ml/types";
 import { TaskDialog } from "@/features/tasks/components/TaskDialog";
 import { TaskList } from "@/features/tasks/components/TaskList";
 import type { TaskRecord } from "@/features/tasks/types";
@@ -64,6 +66,8 @@ interface ContactDetail {
     value: string | number;
     stage: DealStageValue;
     expectedCloseDate: string;
+    winProbability: number | null;
+    scoreFactors: StoredScoreFactors | null;
   }[];
   activities: ActivityItem[];
   tasks: TaskRecord[];
@@ -281,7 +285,10 @@ export default function ContactDetailPage() {
                       <Link href={`/deals/${deal.id}`} className="block truncate text-xs font-semibold text-foreground hover:text-primary">
                         {deal.title}
                       </Link>
-                      <p className="text-[11px] text-muted-foreground">Close {formatDate(deal.expectedCloseDate)}</p>
+                      <div className="mt-0.5 flex flex-wrap items-center gap-2">
+                        <p className="text-[11px] text-muted-foreground">Close {formatDate(deal.expectedCloseDate)}</p>
+                        <WinScoreBadge stage={deal.stage} winProbability={deal.winProbability} scoreFactors={deal.scoreFactors} />
+                      </div>
                     </div>
                     <div className="text-right shrink-0">
                       <span className="block text-xs font-bold">{formatINR(deal.value)}</span>

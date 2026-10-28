@@ -1,6 +1,7 @@
 import { Prisma, TaskPriority, TaskStatus } from "@prisma/client";
 import type { AuthenticatedUser } from "@/features/auth/server/permissions";
 import { enumParam } from "@/lib/pagination";
+import { startOfTodayIST } from "@/lib/dates";
 
 export const taskInclude = {
   assignee: { select: { id: true, name: true } },
@@ -8,10 +9,9 @@ export const taskInclude = {
   deal: { select: { id: true, title: true } },
 } satisfies Prisma.TaskInclude;
 
+/** Overdue = open and due before the start of today in IST (matches the dashboard). */
 export function startOfToday(): Date {
-  const d = new Date();
-  d.setHours(0, 0, 0, 0);
-  return d;
+  return startOfTodayIST();
 }
 
 /**

@@ -169,7 +169,7 @@ export function Sidebar({
       {!collapsed && (
         <div className="p-4 border-t border-border">
           <div className="rounded-lg bg-muted/60 p-3 text-xs">
-            <p className="font-semibold text-foreground">Akshara CRM v0.2</p>
+            <p className="font-semibold text-foreground">Akshara CRM v0.3</p>
             <p className="text-[11px] text-muted-foreground mt-0.5">
               INR Pipeline & ML Engine
             </p>

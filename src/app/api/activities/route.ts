@@ -5,6 +5,7 @@ import { activitySchema } from "@/features/activities/schemas/activity";
 import { apiSuccess, handleApiError, apiError } from "@/lib/api-response";
 import { parseListParams, paginationMeta, enumParam } from "@/lib/pagination";
 import { ActivityType, Prisma } from "@prisma/client";
+import { safeRescoreDeal } from "@/features/ml/server/inference";
 
 export const dynamic = "force-dynamic";
 
@@ -126,6 +127,8 @@ export async function POST(req: NextRequest) {
       },
     });
 
+    // A new meeting/call on a deal changes its win probability.
+    await safeRescoreDeal(activity.dealId);
     return apiSuccess(activity, 201);
   } catch (error) {
     if (error instanceof NextResponse) return error;
