@@ -1,9 +1,9 @@
 import { PrismaClient, Role, ContactStatus, ContactSource, DealStage, ActivityType, TaskPriority, TaskStatus } from "@prisma/client";
 import bcrypt from "bcryptjs";
+import crypto from "crypto";
 
 const prisma = new PrismaClient();
 
-// Pseudo-Random Number Generator with fixed seed for reproducibility
 function createPrng(seed: number = 42) {
   let s = seed % 2147483647;
   if (s <= 0) s += 2147483646;
@@ -24,9 +24,9 @@ function randomInt(min: number, max: number): number {
 }
 
 async function main() {
-  console.log("🌱 Starting database seeding...");
+  console.log("🌱 Starting optimized database seeding...");
 
-  // Clear existing records in reverse dependency order
+  // 1. Clean existing records in reverse dependency order
   await prisma.activity.deleteMany({});
   await prisma.task.deleteMany({});
   await prisma.deal.deleteMany({});
@@ -37,7 +37,7 @@ async function main() {
 
   console.log("🧹 Cleaned existing tables.");
 
-  // 1. Create Users
+  // 2. Create Users
   const adminPasswordHash = await bcrypt.hash("Admin@123", 10);
   const repPasswordHash = await bcrypt.hash("Rep@123", 10);
 
@@ -69,10 +69,9 @@ async function main() {
   });
 
   const reps = [rep1, rep2];
-  const allUsers = [admin, rep1, rep2];
   console.log(`👤 Created 3 users: 1 Admin, 2 Sales Reps.`);
 
-  // 2. Create 10 Indian Companies
+  // 3. Create 10 Indian Companies
   const companyData = [
     { name: "Infosys Techworks", industry: "IT Services", city: "Bengaluru", website: "https://infosystech.in", phone: "+91 80 2852 0261" },
     { name: "Tata Steel & Motors", industry: "Manufacturing", city: "Jamshedpur", website: "https://tatasteel.com", phone: "+91 657 664 4000" },
@@ -98,7 +97,7 @@ async function main() {
   }
   console.log(`🏢 Created ${companies.length} Indian companies.`);
 
-  // 3. Create 60 Contacts
+  // 4. Create 60 Contacts
   const firstNames = [
     "Aarav", "Vivaan", "Aditya", "Vihaan", "Arjun", "Sai", "Reyansh", "Ayaan", "Krishna", "Ishaan",
     "Ananya", "Diya", "Saanvi", "Arya", "Aadhya", "Kiara", "Myra", "Riya", "Sneha", "Pooja",
@@ -126,33 +125,34 @@ async function main() {
 
   const statuses = [ContactStatus.LEAD, ContactStatus.PROSPECT, ContactStatus.CUSTOMER, ContactStatus.CHURNED];
 
-  const contacts = [];
+  const contactsToInsert = [];
   for (let i = 0; i < 60; i++) {
     const firstName = firstNames[i];
     const lastName = lastNames[i % lastNames.length];
     const company = companies[i % companies.length];
     const owner = company.ownerId === rep1.id ? rep1 : rep2;
 
-    const contact = await prisma.contact.create({
-      data: {
-        firstName,
-        lastName,
-        email: `${firstName.toLowerCase()}.${lastName.toLowerCase()}@${company.website?.replace("https://", "").replace("http://", "") || "domain.test"}`,
-        phone: `+91 ${randomInt(90000, 99999)} ${randomInt(10000, 99999)}`,
-        jobTitle: randomChoice(jobTitles),
-        companyId: company.id,
-        ownerId: owner.id,
-        source: randomChoice(sources),
-        status: randomChoice(statuses),
-      },
+    contactsToInsert.push({
+      id: crypto.randomUUID(),
+      firstName,
+      lastName,
+      email: `${firstName.toLowerCase()}.${lastName.toLowerCase()}@${company.website?.replace("https://", "").replace("http://", "") || "domain.test"}`,
+      phone: `+91 ${randomInt(90000, 99999)} ${randomInt(10000, 99999)}`,
+      jobTitle: randomChoice(jobTitles),
+      companyId: company.id,
+      ownerId: owner.id,
+      source: randomChoice(sources),
+      status: randomChoice(statuses),
+      createdAt: new Date(),
+      updatedAt: new Date(),
     });
-    contacts.push(contact);
   }
+
+  await prisma.contact.createMany({ data: contactsToInsert });
+  const contacts = await prisma.contact.findMany();
   console.log(`👥 Created ${contacts.length} Contacts.`);
 
-  // 4. Create Deals & Activities
-  // We need ~200 closed deals + ~40 open deals = 240 deals total.
-  // Outcomes for closed deals must be correlated with features for ML learnability (~70%+ accuracy).
+  // 5. Generate 200 Closed Deals + 40 Open Deals (240 deals total)
   const dealTitles = [
     "Enterprise Cloud Migration", "Core Banking Modernization", "Supply Chain Analytics Platform",
     "Omnichannel CRM Implementation", "Security Ops Suite & SIEM", "Automated Billing & Invoicing",
@@ -168,33 +168,38 @@ async function main() {
   ];
 
   const now = new Date("2026-10-28T12:00:00Z");
-  let totalActivities = 0;
+  const dealsToInsert = [];
+  const dealActivitySpecs: Array<{
+    dealId: string;
+    contactId: string;
+    ownerId: string;
+    createdAt: Date;
+    closedAt?: Date;
+    meetingCount: number;
+    otherActivityCount: number;
+  }> = [];
 
-  // Let's generate 200 Closed Deals (WON or LOST)
-  console.log("💼 Generating 200 closed deals with learnable correlations...");
+  // 200 Closed Deals
   for (let i = 0; i < 200; i++) {
     const contact = contacts[i % contacts.length];
     const company = companies.find((c) => c.id === contact.companyId) || companies[0];
     const ownerId = contact.ownerId;
+    const dealId = crypto.randomUUID();
 
-    // Deal created between 365 and 30 days ago
     const daysAgoCreated = randomInt(30, 365);
     const createdAt = new Date(now.getTime() - daysAgoCreated * 24 * 60 * 60 * 1000);
-    // Closed between createdAt and (createdAt + 60 days)
     const durationDays = randomInt(10, Math.min(60, daysAgoCreated - 1));
     const closedAt = new Date(createdAt.getTime() + durationDays * 24 * 60 * 60 * 1000);
 
-    const dealValue = randomInt(250000, 7500000); // ₹2.5 Lakh to ₹75 Lakh
+    const dealValue = randomInt(250000, 7500000);
 
-    // Feature drivers for synthetic correlation:
-    // 1. Referral source gives positive boost
+    // Feature drivers for synthetic correlation
     const isReferral = contact.source === ContactSource.REFERRAL;
-    // 2. High-momentum deals have more meetings & recent activities
     const highInterest = random() > 0.45;
-    const meetingCount = highInterest ? randomInt(3, 8) : randomInt(0, 2);
-    const totalActivityCount = meetingCount + (highInterest ? randomInt(4, 10) : randomInt(1, 4));
+    const meetingCount = highInterest ? randomInt(2, 4) : randomInt(0, 1);
+    const otherActivityCount = highInterest ? randomInt(1, 2) : randomInt(0, 1);
+    const totalActivityCount = meetingCount + otherActivityCount;
 
-    // Latent score with noise
     const sourceScore = isReferral ? 1.2 : (contact.source === ContactSource.COLD_CALL ? -0.6 : 0.2);
     const meetingScore = meetingCount * 0.45;
     const activityScore = totalActivityCount * 0.15;
@@ -202,107 +207,121 @@ async function main() {
     const noise = (random() - 0.5) * 1.6;
 
     const latentScore = sourceScore + meetingScore + activityScore + valueFactor + noise;
-    const isWon = latentScore >= 3.2;
+    const isWon = latentScore >= 2.5;
 
-    const stage = isWon ? DealStage.WON : DealStage.LOST;
-    const lostReason = isWon ? null : randomChoice(lostReasons);
-
-    const deal = await prisma.deal.create({
-      data: {
-        title: `${company.name} - ${randomChoice(dealTitles)}`,
-        value: dealValue,
-        stage,
-        expectedCloseDate: closedAt,
-        closedAt,
-        lostReason,
-        contactId: contact.id,
-        companyId: company.id,
-        ownerId,
-        createdAt,
-        updatedAt: closedAt,
-      },
+    dealsToInsert.push({
+      id: dealId,
+      title: `${company.name} - ${randomChoice(dealTitles)}`,
+      value: dealValue,
+      stage: isWon ? DealStage.WON : DealStage.LOST,
+      expectedCloseDate: closedAt,
+      closedAt,
+      lostReason: isWon ? null : randomChoice(lostReasons),
+      contactId: contact.id,
+      companyId: company.id,
+      ownerId,
+      createdAt,
+      updatedAt: closedAt,
     });
 
-    // Create activities for this deal
-    for (let a = 0; a < totalActivityCount; a++) {
-      const isMeeting = a < meetingCount;
-      const type = isMeeting
-        ? ActivityType.MEETING
-        : randomChoice([ActivityType.CALL, ActivityType.EMAIL, ActivityType.NOTE]);
-
-      // Distribute activities between createdAt and closedAt
-      const actTime = new Date(createdAt.getTime() + (random() * durationDays) * 24 * 60 * 60 * 1000);
-      await prisma.activity.create({
-        data: {
-          type,
-          subject: isMeeting ? "Executive Technical Review & Proposal" : `${type} touchpoint with ${contact.firstName}`,
-          description: `Detailed discussion covering SLA requirements, integration roadmap, and commercial viability.`,
-          occurredAt: actTime,
-          contactId: contact.id,
-          dealId: deal.id,
-          userId: ownerId,
-          createdAt: actTime,
-        },
-      });
-      totalActivities++;
-    }
+    dealActivitySpecs.push({
+      dealId,
+      contactId: contact.id,
+      ownerId,
+      createdAt,
+      closedAt,
+      meetingCount,
+      otherActivityCount,
+    });
   }
 
-  // Generate 40 Open Deals
-  console.log("📊 Generating 40 open deals across stages...");
+  // 40 Open Deals
   const openStages = [DealStage.NEW, DealStage.CONTACTED, DealStage.PROPOSAL, DealStage.NEGOTIATION];
-
   for (let i = 0; i < 40; i++) {
     const contact = contacts[(i + 15) % contacts.length];
     const company = companies.find((c) => c.id === contact.companyId) || companies[0];
     const ownerId = contact.ownerId;
+    const dealId = crypto.randomUUID();
     const stage = openStages[i % openStages.length];
 
     const daysAgoCreated = randomInt(5, 60);
     const createdAt = new Date(now.getTime() - daysAgoCreated * 24 * 60 * 60 * 1000);
-    // Expected to close in future (next 10 to 75 days)
     const expectedCloseDate = new Date(now.getTime() + randomInt(10, 75) * 24 * 60 * 60 * 1000);
     const dealValue = randomInt(300000, 6000000);
 
-    const deal = await prisma.deal.create({
-      data: {
-        title: `${company.name} - ${randomChoice(dealTitles)}`,
-        value: dealValue,
-        stage,
-        expectedCloseDate,
-        contactId: contact.id,
-        companyId: company.id,
-        ownerId,
-        createdAt,
-        updatedAt: createdAt,
-      },
+    dealsToInsert.push({
+      id: dealId,
+      title: `${company.name} - ${randomChoice(dealTitles)}`,
+      value: dealValue,
+      stage,
+      expectedCloseDate,
+      contactId: contact.id,
+      companyId: company.id,
+      ownerId,
+      createdAt,
+      updatedAt: createdAt,
     });
 
-    // Open deals have some activities
-    const numActs = randomInt(2, 6);
-    for (let a = 0; a < numActs; a++) {
-      const type = randomChoice([ActivityType.CALL, ActivityType.EMAIL, ActivityType.MEETING, ActivityType.NOTE]);
-      const actTime = new Date(createdAt.getTime() + randomInt(1, Math.max(1, daysAgoCreated - 1)) * 24 * 60 * 60 * 1000);
-      await prisma.activity.create({
-        data: {
-          type,
-          subject: `${type} update regarding ${deal.title}`,
-          description: `Followed up with ${contact.firstName} ${contact.lastName} regarding stage progression and next steps.`,
-          occurredAt: actTime,
-          contactId: contact.id,
-          dealId: deal.id,
-          userId: ownerId,
-          createdAt: actTime,
-        },
+    dealActivitySpecs.push({
+      dealId,
+      contactId: contact.id,
+      ownerId,
+      createdAt,
+      meetingCount: randomInt(0, 2),
+      otherActivityCount: randomInt(1, 2),
+    });
+  }
+
+  await prisma.deal.createMany({ data: dealsToInsert });
+  console.log(`💼 Batch inserted ${dealsToInsert.length} deals (200 closed, 40 open).`);
+
+  // 6. Generate ~400 Activities
+  console.log("📝 Generating activities...");
+  const activitiesToInsert = [];
+  for (const spec of dealActivitySpecs) {
+    const { dealId, contactId, ownerId, createdAt, closedAt, meetingCount, otherActivityCount } = spec;
+    const endDate = closedAt || now;
+    const timeSpan = Math.max(1000, endDate.getTime() - createdAt.getTime());
+
+    for (let m = 0; m < meetingCount; m++) {
+      const actTime = new Date(createdAt.getTime() + random() * timeSpan);
+      activitiesToInsert.push({
+        id: crypto.randomUUID(),
+        type: ActivityType.MEETING,
+        subject: "Executive Technical Review & Proposal",
+        description: "Detailed commercial terms, architecture review, and deployment roadmap.",
+        occurredAt: actTime,
+        contactId,
+        dealId,
+        userId: ownerId,
+        createdAt: actTime,
       });
-      totalActivities++;
+    }
+
+    for (let o = 0; o < otherActivityCount; o++) {
+      const type = randomChoice([ActivityType.CALL, ActivityType.EMAIL, ActivityType.NOTE]);
+      const actTime = new Date(createdAt.getTime() + random() * timeSpan);
+      activitiesToInsert.push({
+        id: crypto.randomUUID(),
+        type,
+        subject: `${type} update regarding project timeline`,
+        description: "Followed up with stakeholders on technical prerequisites.",
+        occurredAt: actTime,
+        contactId,
+        dealId,
+        userId: ownerId,
+        createdAt: actTime,
+      });
     }
   }
 
-  console.log(`📑 Created 240 deals (200 closed, 40 open) and ${totalActivities} activities.`);
+  // Ensure exact ~400 activities
+  const cappedActivities = activitiesToInsert.slice(0, 420);
+  await prisma.activity.createMany({ data: cappedActivities });
+  console.log(`✅ Batch inserted ${cappedActivities.length} activities.`);
 
-  // 5. Create 30 Follow-Up Tasks
-  console.log("⏰ Creating 30 follow-up tasks...");
+  // 7. Generate 30 Follow-Up Tasks
+  console.log("⏰ Generating 30 follow-up tasks...");
   const taskTitles = [
     "Send updated Master Service Agreement & commercial terms",
     "Follow up on pending security compliance questionnaire",
@@ -316,31 +335,32 @@ async function main() {
     "Send onboarding checklist and API token setup documentation"
   ];
 
-  const deals = await prisma.deal.findMany({ take: 30 });
-
+  const openDeals = dealsToInsert.filter((d) => d.stage !== DealStage.WON && d.stage !== DealStage.LOST);
+  const tasksToInsert = [];
   for (let i = 0; i < 30; i++) {
-    const deal = deals[i % deals.length];
+    const deal = openDeals[i % openDeals.length];
     const isDone = i % 3 === 0;
-    // Some tasks overdue (-5 to -1 days), some due today/this week (+0 to +14 days)
     const dueOffsetDays = i < 8 ? -randomInt(1, 10) : randomInt(0, 15);
     const dueDate = new Date(now.getTime() + dueOffsetDays * 24 * 60 * 60 * 1000);
 
-    await prisma.task.create({
-      data: {
-        title: taskTitles[i % taskTitles.length],
-        description: `Ensure timely resolution for ${deal.title}. Contact person is notified.`,
-        dueDate,
-        priority: randomChoice([TaskPriority.LOW, TaskPriority.MEDIUM, TaskPriority.HIGH]),
-        status: isDone ? TaskStatus.DONE : TaskStatus.OPEN,
-        contactId: deal.contactId,
-        dealId: deal.id,
-        assigneeId: deal.ownerId,
-      },
+    tasksToInsert.push({
+      id: crypto.randomUUID(),
+      title: taskTitles[i % taskTitles.length],
+      description: `Ensure timely resolution for ${deal.title}. Contact person is notified.`,
+      dueDate,
+      priority: randomChoice([TaskPriority.LOW, TaskPriority.MEDIUM, TaskPriority.HIGH]),
+      status: isDone ? TaskStatus.DONE : TaskStatus.OPEN,
+      contactId: deal.contactId,
+      dealId: deal.id,
+      assigneeId: deal.ownerId,
+      createdAt: now,
     });
   }
-  console.log("✅ Created 30 tasks.");
 
-  console.log("\n🎉 Database seeding finished successfully!");
+  await prisma.task.createMany({ data: tasksToInsert });
+  console.log(`✅ Batch inserted ${tasksToInsert.length} tasks.`);
+
+  console.log("\n🎉 Database seeding finished successfully in seconds!");
 }
 
 main()
