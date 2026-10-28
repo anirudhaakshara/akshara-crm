@@ -36,6 +36,7 @@ export default function TasksPage() {
   const [rows, setRows] = useState<TaskRecord[]>([]);
   const [counts, setCounts] = useState({ OPEN: 0, DONE: 0, overdue: 0 });
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
@@ -70,12 +71,13 @@ export default function TasksPage() {
       setCounts(res.meta.counts);
       setTotalPages(res.meta.totalPages);
       setTotalItems(res.meta.totalItems);
+      setLoadError(null);
     } catch (err) {
-      toast.error(errorMessage(err, "Failed to load tasks"));
+      setLoadError(errorMessage(err, "Failed to load tasks"));
     } finally {
       setLoading(false);
     }
-  }, [page, tab, sortField, sortOrder, search, priority, assigneeId, overdueOnly, toast]);
+  }, [page, tab, sortField, sortOrder, search, priority, assigneeId, overdueOnly]);
 
   useEffect(() => {
     const t = setTimeout(fetchTasks, 250);
@@ -167,7 +169,7 @@ export default function TasksPage() {
       cell: (row) => {
         const overdue = isOverdue(row.dueDate, row.status);
         return (
-          <span className={cn("relative inline-flex items-center gap-1 whitespace-nowrap text-[11px]", overdue ? "font-semibold text-destructive" : "text-muted-foreground")}>
+          <span className={cn("relative inline-flex items-center gap-1 whitespace-nowrap text-[11px]", overdue ? "font-semibold text-red-700 dark:text-red-400" : "text-muted-foreground")}>
             {overdue && <AlertTriangle className="h-3 w-3" />}
             {formatDate(row.dueDate)}
             {overdue && <span className="sr-only">(overdue)</span>}
@@ -197,7 +199,7 @@ export default function TasksPage() {
             <Edit2 className="h-3.5 w-3.5 text-muted-foreground" />
           </Button>
           <Button variant="ghost" size="icon" aria-label={`Delete ${row.title}`} onClick={() => setDeleteId(row.id)}>
-            <Trash2 className="h-3.5 w-3.5 text-destructive" />
+            <Trash2 className="h-3.5 w-3.5 text-red-700 dark:text-red-400" />
           </Button>
         </div>
       ),
@@ -214,7 +216,7 @@ export default function TasksPage() {
           </h1>
           <p className="text-xs text-muted-foreground mt-1">
             {counts.overdue > 0 ? (
-              <span className="text-destructive font-semibold">{counts.overdue} overdue</span>
+              <span className="text-red-700 dark:text-red-400 font-semibold">{counts.overdue} overdue</span>
             ) : (
               "Nothing overdue"
             )}{" "}
@@ -250,7 +252,7 @@ export default function TasksPage() {
             )}
           >
             {s === "OPEN" ? "Open" : "Done"}
-            <span className="ml-1.5 rounded-full bg-muted px-1.5 py-0.5 text-[10px]">{counts[s]}</span>
+            <span className="ml-1.5 rounded-full bg-muted px-1.5 py-0.5 text-[10px] text-foreground">{counts[s]}</span>
           </button>
         ))}
       </div>
@@ -259,6 +261,9 @@ export default function TasksPage() {
         columns={columns}
         data={rows}
         loading={loading}
+        error={loadError}
+        onRetry={fetchTasks}
+        caption="Tasks"
         page={page}
         totalPages={totalPages}
         totalItems={totalItems}

@@ -7,6 +7,8 @@ import { useSession } from "next-auth/react";
 import { Kanban, LayoutGrid, List, Plus, Search, Trash2, Edit2 } from "lucide-react";
 import { DataTable, ColumnDef } from "@/components/datatable/DataTable";
 import { Button } from "@/components/ui/button";
+import { ExportButton } from "@/components/ui/export-button";
+import { ErrorState } from "@/components/ui/error-state";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { ConfirmDialog } from "@/components/feedback/ConfirmDialog";
@@ -64,6 +66,7 @@ function DealsPageInner() {
   // Board state
   const [columns, setColumns] = useState<BoardColumn[]>([]);
   const [boardLoading, setBoardLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [pendingLost, setPendingLost] = useState<DealRecord | null>(null);
   const [savingLost, setSavingLost] = useState(false);
 
@@ -111,12 +114,13 @@ function DealsPageInner() {
       if (ownerId) params.set("ownerId", ownerId);
       const res = await apiFetch<{ columns: BoardColumn[] }>(`/api/deals?${params}`);
       setColumns(res.columns);
+      setLoadError(null);
     } catch (err) {
-      toast.error(errorMessage(err, "Failed to load pipeline"));
+      setLoadError(errorMessage(err, "Failed to load pipeline"));
     } finally {
       setBoardLoading(false);
     }
-  }, [debouncedSearch, ownerId, toast]);
+  }, [debouncedSearch, ownerId]);
 
   const fetchTable = useCallback(async () => {
     setTableLoading(true);
@@ -136,12 +140,13 @@ function DealsPageInner() {
       setTotalPages(res.meta.totalPages);
       setTotalItems(res.meta.totalItems);
       setTotalValue(res.meta.totalValue);
+      setLoadError(null);
     } catch (err) {
-      toast.error(errorMessage(err, "Failed to load deals"));
+      setLoadError(errorMessage(err, "Failed to load deals"));
     } finally {
       setTableLoading(false);
     }
-  }, [page, sortField, sortOrder, debouncedSearch, ownerId, stageFilter, toast]);
+  }, [page, sortField, sortOrder, debouncedSearch, ownerId, stageFilter]);
 
   useEffect(() => {
     if (view === "board") fetchBoard();
@@ -211,6 +216,18 @@ function DealsPageInner() {
       setSortOrder(field === "title" ? "asc" : "desc");
     }
   }
+
+  // Export uses the same filters as the visible view (board: search + owner; table: + stage + sort).
+  const exportParams = new URLSearchParams();
+  if (debouncedSearch) exportParams.set("q", debouncedSearch);
+  if (ownerId) exportParams.set("ownerId", ownerId);
+  if (view === "table") {
+    exportParams.set("sortBy", sortField);
+    exportParams.set("sortOrder", sortOrder);
+    if (stageFilter === "open" || stageFilter === "closed") exportParams.set("status", stageFilter);
+    else if (stageFilter) exportParams.set("stage", stageFilter);
+  }
+  const exportButton = <ExportButton href={`/api/deals/export?${exportParams}`} fallbackName="deals.csv" />;
 
   const openTotal = columns.filter((c) => c.stage !== "WON" && c.stage !== "LOST").reduce((s, c) => s + c.total, 0);
   const openCount = columns.filter((c) => c.stage !== "WON" && c.stage !== "LOST").reduce((s, c) => s + c.count, 0);
@@ -283,7 +300,7 @@ function DealsPageInner() {
             <Edit2 className="h-3.5 w-3.5 text-muted-foreground" />
           </Button>
           <Button variant="ghost" size="icon" aria-label={`Delete ${row.title}`} onClick={() => setDeleteId(row.id)}>
-            <Trash2 className="h-3.5 w-3.5 text-destructive" />
+            <Trash2 className="h-3.5 w-3.5 text-red-700 dark:text-red-400" />
           </Button>
         </div>
       ),
@@ -374,14 +391,22 @@ function DealsPageInner() {
               />
             </div>
             {ownerSelect}
+            <div className="sm:ml-auto">{exportButton}</div>
           </div>
-          <KanbanBoard columns={columns} loading={boardLoading} onMove={handleMove} showOwner={isAdmin} />
+          {loadError ? (
+            <ErrorState message={loadError} onRetry={fetchBoard} />
+          ) : (
+            <KanbanBoard columns={columns} loading={boardLoading} onMove={handleMove} showOwner={isAdmin} />
+          )}
         </>
       ) : (
         <DataTable
           columns={tableColumns}
           data={rows}
           loading={tableLoading}
+          error={loadError}
+          onRetry={fetchTable}
+          caption="Deals"
           page={page}
           totalPages={totalPages}
           totalItems={totalItems}
@@ -397,6 +422,7 @@ function DealsPageInner() {
           sortOrder={sortOrder}
           onSortChange={handleSort}
           emptyMessage="No deals match these filters."
+          actionButton={exportButton}
           filterControls={
             <>
               <Select

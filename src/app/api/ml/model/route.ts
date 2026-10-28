@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { DealStage } from "@prisma/client";
 import prisma from "@/lib/prisma";
-import { requireUser } from "@/features/auth/server/permissions";
-import { apiError, apiSuccess, handleApiError } from "@/lib/api-response";
+import { requireAdmin } from "@/features/auth/server/permissions";
+import { apiSuccess, handleApiError } from "@/lib/api-response";
 import { MIN_CLOSED_DEALS } from "@/features/ml/types";
 
 export const dynamic = "force-dynamic";
@@ -10,10 +10,7 @@ export const dynamic = "force-dynamic";
 /** GET /api/ml/model — active model, recent versions and data readiness (admin). */
 export async function GET() {
   try {
-    const user = await requireUser();
-    if (user.role !== "ADMIN") {
-      return apiError("FORBIDDEN", "Only admins can view model details", 403);
-    }
+    await requireAdmin();
 
     const closedStages = [DealStage.WON, DealStage.LOST];
     const [active, history, won, lost, open, scoredOpen] = await Promise.all([

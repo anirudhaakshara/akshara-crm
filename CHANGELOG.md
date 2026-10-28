@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.0] - Phase 4: Power Features, Polish & Release
+
+### Added
+- **Global search** (<kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>K</kbd>, <kbd>/</kbd>, or the header search button) across companies, contacts and deals via `GET /api/search?q=`, scoped to what the user may see. Grouped results, full-name matching, arrow-key navigation, quick links when empty, screen-reader announcements.
+- **CSV export** of contacts (`/api/contacts/export`) and deals (`/api/deals/export`) from the table and board views, honouring the current search, filters, sort and permissions (up to 5,000 rows). UTF-8 BOM for Excel, ISO dates, numeric values, and spreadsheet formula-injection protection.
+- **User management** (`/settings/users`, admin): create users (bcrypt-hashed passwords, validated strength) and change roles with confirmation. Admins can't change their own role and the last admin can't be demoted. `POST /api/users`, `PATCH /api/users/[id]`.
+- **Keyboard Kanban**: focus a card's grip, press Space, use ←/→ to jump between stages, Space to drop.
+- Route-level error, not-found, loading and global-error pages; inline error states with **Try again** on every list and detail page.
+- Per-page browser tab titles; skip-to-content link.
+
+### Security
+- The server now reads the caller's role from the database on every request, so promoting or demoting a user takes effect immediately instead of when their 30-day session expires; the session cookie refreshes its role too.
+- Login returns the same “Invalid email or password” for unknown emails and wrong passwords (no account enumeration).
+- The development fallback for `AUTH_SECRET` is no longer used in production.
+
+### Changed
+- Companies module rebuilt on the shared components: validated dialog with inline errors and industry suggestions, owner column and filter for admins, open vs total pipeline on the company page, score and stage badges on its deals.
+- Dialogs trap focus, restore it on close, close on Escape and lock background scroll; confirmations use `alertdialog` and focus Cancel first.
+- Toasts are announced to screen readers (errors assertively) and stay longer for errors; entrance animations respect reduced-motion.
+- Contrast: darker brand blue, secondary text and badge text in light mode, brighter reds in dark mode — every page passes axe-core WCAG 2.1 AA (no serious or critical issues) in both themes.
+- Tables announce sort order (`aria-sort`), label search and filter controls, and use a labelled pagination region.
+- Header: the decorative “engine active” badge is replaced by global search; user menu and mobile navigation close on Escape.
+- Seed: contacts are loaded in a fixed order, so reseeding is fully reproducible (identical data and model metrics every time).
+
 ## [0.3.0] - Phase 3: ML Insights & Dashboard
 
 ### Added

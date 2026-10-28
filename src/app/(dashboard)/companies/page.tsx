@@ -3,14 +3,18 @@
 import React, { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
-import { Building2, Plus, Edit2, Trash2, Globe, Phone, ExternalLink } from "lucide-react";
+import { Building2, Plus, Edit2, Trash2, Globe, Phone } from "lucide-react";
 import { DataTable, ColumnDef } from "@/components/datatable/DataTable";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { CompanyDialog } from "@/features/companies/components/CompanyDialog";
+import { Select } from "@/components/ui/select";
 import { ConfirmDialog } from "@/components/feedback/ConfirmDialog";
 import { useToast } from "@/components/feedback/Toast";
+import { apiFetch, errorMessage, Paginated } from "@/lib/api-client";
 import { formatDate } from "@/lib/formatters";
+import { useUserOptions } from "@/hooks/useOptions";
+import { CompanyDialog, CompanyFormData } from "@/features/companies/components/CompanyDialog";
+import { INDUSTRIES } from "@/features/companies/constants";
 
 interface CompanyRecord {
   id: string;
@@ -19,117 +23,79 @@ interface CompanyRecord {
   city: string;
   website: string | null;
   phone: string | null;
+  ownerId: string;
   createdAt: string;
   owner: { id: string; name: string; email: string };
   _count: { contacts: number; deals: number };
 }
 
-interface UserOption {
-  id: string;
-  name: string;
-  email: string;
-  role: string;
-}
+const PAGE_SIZE = 10;
 
 export default function CompaniesPage() {
   const { data: session } = useSession();
   const isAdmin = session?.user?.role === "ADMIN";
   const toast = useToast();
+  const users = useUserOptions(isAdmin);
 
   const [companies, setCompanies] = useState<CompanyRecord[]>([]);
-  const [users, setUsers] = useState<UserOption[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
   const [searchTerm, setSearchTerm] = useState("");
   const [industryFilter, setIndustryFilter] = useState("");
+  const [ownerId, setOwnerId] = useState("");
   const [sortField, setSortField] = useState("createdAt");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
 
-  // Dialog states
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [editingCompany, setEditingCompany] = useState<CompanyRecord | null>(null);
-
-  // Delete states
-  const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [editingCompany, setEditingCompany] = useState<CompanyFormData | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<CompanyRecord | null>(null);
   const [deleting, setDeleting] = useState(false);
-
-  // Fetch users for assignment if admin
-  useEffect(() => {
-    if (isAdmin) {
-      fetch("/api/users")
-        .then((res) => res.json())
-        .then((res) => {
-          if (res.data?.users) setUsers(res.data.users);
-          else if (res.users) setUsers(res.users);
-        })
-        .catch(() => {});
-    }
-  }, [isAdmin]);
 
   const fetchCompanies = useCallback(async () => {
     setLoading(true);
     try {
-      const params = new URLSearchParams({
-        page: page.toString(),
-        limit: "10",
-        sortBy: sortField,
-        sortOrder,
-      });
+      const params = new URLSearchParams({ page: String(page), limit: String(PAGE_SIZE), sortBy: sortField, sortOrder });
       if (searchTerm) params.set("q", searchTerm);
       if (industryFilter) params.set("industry", industryFilter);
-
-      const res = await fetch(`/api/companies?${params.toString()}`);
-      const json = await res.json();
-
-      if (res.ok) {
-        setCompanies(json.data || []);
-        if (json.meta) {
-          setTotalPages(json.meta.totalPages);
-          setTotalItems(json.meta.totalItems);
-        }
-      } else {
-        toast.error(json.error?.message || "Failed to load companies");
-      }
-    } catch {
-      toast.error("Network error loading companies");
+      if (ownerId) params.set("ownerId", ownerId);
+      const res = await apiFetch<Paginated<CompanyRecord>>(`/api/companies?${params}`);
+      setCompanies(res.data);
+      setTotalPages(res.meta.totalPages);
+      setTotalItems(res.meta.totalItems);
+      setLoadError(null);
+    } catch (err) {
+      setLoadError(errorMessage(err, "Failed to load companies"));
     } finally {
       setLoading(false);
     }
-  }, [page, sortField, sortOrder, searchTerm, industryFilter, toast]);
+  }, [page, sortField, sortOrder, searchTerm, industryFilter, ownerId]);
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      fetchCompanies();
-    }, 250);
+    const timer = setTimeout(fetchCompanies, 250);
     return () => clearTimeout(timer);
   }, [fetchCompanies]);
 
   function handleSort(field: string) {
-    if (sortField === field) {
-      setSortOrder(sortOrder === "asc" ? "desc" : "asc");
-    } else {
+    if (sortField === field) setSortOrder(sortOrder === "asc" ? "desc" : "asc");
+    else {
       setSortField(field);
       setSortOrder("asc");
     }
   }
 
   async function handleDelete() {
-    if (!deleteId) return;
+    if (!deleteTarget) return;
     setDeleting(true);
     try {
-      const res = await fetch(`/api/companies/${deleteId}`, { method: "DELETE" });
-      const json = await res.json();
-      if (res.ok) {
-        toast.success("Company deleted successfully");
-        setDeleteId(null);
-        fetchCompanies();
-      } else {
-        toast.error(json.error?.message || "Failed to delete company");
-      }
-    } catch {
-      toast.error("Network error deleting company");
+      await apiFetch(`/api/companies/${deleteTarget.id}`, { method: "DELETE" });
+      toast.success(`${deleteTarget.name} deleted`);
+      setDeleteTarget(null);
+      fetchCompanies();
+    } catch (err) {
+      toast.error(errorMessage(err, "Failed to delete company"));
     } finally {
       setDeleting(false);
     }
@@ -141,13 +107,9 @@ export default function CompaniesPage() {
       header: "Company",
       sortable: true,
       cell: (row) => (
-        <div className="flex flex-col">
-          <Link
-            href={`/companies/${row.id}`}
-            className="font-semibold text-foreground hover:text-primary transition-colors flex items-center gap-1.5"
-          >
-            <span>{row.name}</span>
-            <ExternalLink className="h-3 w-3 opacity-0 group-hover:opacity-100 transition-opacity" />
+        <div className="flex flex-col min-w-[160px]">
+          <Link href={`/companies/${row.id}`} className="font-semibold text-foreground hover:text-primary transition-colors">
+            {row.name}
           </Link>
           <span className="text-[11px] text-muted-foreground">{row.city}</span>
         </div>
@@ -158,7 +120,7 @@ export default function CompaniesPage() {
       header: "Industry",
       sortable: true,
       cell: (row) => (
-        <Badge variant="secondary" className="font-medium">
+        <Badge variant="secondary" className="font-medium whitespace-nowrap">
           {row.industry}
         </Badge>
       ),
@@ -169,23 +131,19 @@ export default function CompaniesPage() {
       cell: (row) => (
         <div className="flex flex-col gap-0.5 text-[11px] text-muted-foreground">
           {row.website && (
-            <a
-              href={row.website}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center gap-1 hover:text-primary transition-colors truncate max-w-[150px]"
-            >
-              <Globe className="h-3 w-3" />
+            <a href={row.website} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 hover:text-primary transition-colors truncate max-w-[180px]">
+              <Globe className="h-3 w-3 shrink-0" aria-hidden />
               <span>{row.website.replace(/^https?:\/\//, "")}</span>
+              <span className="sr-only">(opens in a new tab)</span>
             </a>
           )}
           {row.phone && (
-            <span className="inline-flex items-center gap-1">
-              <Phone className="h-3 w-3" />
-              <span>{row.phone}</span>
-            </span>
+            <a href={`tel:${row.phone}`} className="inline-flex items-center gap-1 hover:text-primary whitespace-nowrap">
+              <Phone className="h-3 w-3 shrink-0" aria-hidden />
+              {row.phone}
+            </a>
           )}
-          {!row.website && !row.phone && <span>-</span>}
+          {!row.website && !row.phone && <span>—</span>}
         </div>
       ),
     },
@@ -193,30 +151,19 @@ export default function CompaniesPage() {
       id: "counts",
       header: "Related",
       cell: (row) => (
-        <div className="flex items-center gap-2 text-[11px]">
-          <span className="rounded bg-muted px-2 py-0.5 text-muted-foreground">
-            {row._count.contacts} contacts
-          </span>
-          <span className="rounded bg-muted px-2 py-0.5 text-muted-foreground">
-            {row._count.deals} deals
-          </span>
-        </div>
+        <span className="text-[11px] text-muted-foreground whitespace-nowrap">
+          {row._count.contacts} contacts · {row._count.deals} deals
+        </span>
       ),
     },
-    {
-      id: "owner",
-      header: "Account Owner",
-      cell: (row) => (
-        <span className="text-xs font-medium text-foreground">{row.owner?.name || "-"}</span>
-      ),
-    },
+    ...(isAdmin
+      ? [{ id: "owner", header: "Owner", cell: (row: CompanyRecord) => <span className="text-xs whitespace-nowrap">{row.owner?.name ?? "—"}</span> }]
+      : []),
     {
       id: "createdAt",
       header: "Created",
       sortable: true,
-      cell: (row) => (
-        <span className="text-muted-foreground text-[11px]">{formatDate(row.createdAt)}</span>
-      ),
+      cell: (row) => <span className="text-muted-foreground text-[11px] whitespace-nowrap">{formatDate(row.createdAt)}</span>,
     },
     {
       id: "actions",
@@ -227,21 +174,16 @@ export default function CompaniesPage() {
           <Button
             variant="ghost"
             size="icon"
+            aria-label={`Edit ${row.name}`}
             onClick={() => {
               setEditingCompany(row);
               setDialogOpen(true);
             }}
-            title="Edit company"
           >
-            <Edit2 className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground" />
+            <Edit2 className="h-3.5 w-3.5 text-muted-foreground" />
           </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => setDeleteId(row.id)}
-            title="Delete company"
-          >
-            <Trash2 className="h-3.5 w-3.5 text-destructive" />
+          <Button variant="ghost" size="icon" aria-label={`Delete ${row.name}`} onClick={() => setDeleteTarget(row)}>
+            <Trash2 className="h-3.5 w-3.5 text-red-700 dark:text-red-400" />
           </Button>
         </div>
       ),
@@ -253,14 +195,11 @@ export default function CompaniesPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-foreground flex items-center gap-2.5">
-            <Building2 className="h-6 w-6 text-primary" />
-            <span>Companies</span>
+            <Building2 className="h-6 w-6 text-primary" aria-hidden />
+            Companies
           </h1>
-          <p className="text-xs text-muted-foreground mt-1">
-            Manage target accounts, organization profiles, and linked business contacts.
-          </p>
+          <p className="text-xs text-muted-foreground mt-1">Accounts you sell to, with their contacts and deals.</p>
         </div>
-
         <Button
           onClick={() => {
             setEditingCompany(null);
@@ -269,7 +208,7 @@ export default function CompaniesPage() {
           className="gap-1.5 shadow-sm"
         >
           <Plus className="h-4 w-4" />
-          <span>New Company</span>
+          New Company
         </Button>
       </div>
 
@@ -277,9 +216,13 @@ export default function CompaniesPage() {
         columns={columns}
         data={companies}
         loading={loading}
+        error={loadError}
+        onRetry={fetchCompanies}
+        caption="Companies"
         page={page}
         totalPages={totalPages}
         totalItems={totalItems}
+        pageSize={PAGE_SIZE}
         onPageChange={setPage}
         searchTerm={searchTerm}
         onSearchChange={(val) => {
@@ -290,27 +233,44 @@ export default function CompaniesPage() {
         sortField={sortField}
         sortOrder={sortOrder}
         onSortChange={handleSort}
+        emptyMessage={searchTerm || industryFilter || ownerId ? "No companies match these filters." : "No companies yet — add your first account."}
         filterControls={
-          <select
-            value={industryFilter}
-            onChange={(e) => {
-              setIndustryFilter(e.target.value);
-              setPage(1);
-            }}
-            className="h-9 rounded-lg border border-input bg-background px-3 text-xs focus:outline-none focus:ring-1 focus:ring-ring"
-          >
-            <option value="">All Industries</option>
-            <option value="IT Services">IT Services</option>
-            <option value="Manufacturing">Manufacturing</option>
-            <option value="FinTech">FinTech</option>
-            <option value="Healthcare">Healthcare</option>
-            <option value="Logistics">Logistics</option>
-            <option value="Retail">Retail</option>
-            <option value="E-Commerce">E-Commerce</option>
-            <option value="Infrastructure">Infrastructure</option>
-            <option value="EdTech">EdTech</option>
-            <option value="Telecommunications">Telecommunications</option>
-          </select>
+          <>
+            <Select
+              aria-label="Filter by industry"
+              className="sm:w-44"
+              value={industryFilter}
+              onChange={(e) => {
+                setIndustryFilter(e.target.value);
+                setPage(1);
+              }}
+            >
+              <option value="">All industries</option>
+              {INDUSTRIES.map((i) => (
+                <option key={i} value={i}>
+                  {i}
+                </option>
+              ))}
+            </Select>
+            {isAdmin && (
+              <Select
+                aria-label="Filter by owner"
+                className="sm:w-40"
+                value={ownerId}
+                onChange={(e) => {
+                  setOwnerId(e.target.value);
+                  setPage(1);
+                }}
+              >
+                <option value="">All owners</option>
+                {users.map((u) => (
+                  <option key={u.id} value={u.id}>
+                    {u.name}
+                  </option>
+                ))}
+              </Select>
+            )}
+          </>
         }
       />
 
@@ -327,13 +287,13 @@ export default function CompaniesPage() {
       />
 
       <ConfirmDialog
-        open={!!deleteId}
-        title="Delete Company?"
-        description="Are you sure you want to delete this company? Related contacts and deals will retain their data with company unlinked."
-        confirmLabel="Yes, Delete Company"
+        open={!!deleteTarget}
+        title={`Delete ${deleteTarget?.name ?? "company"}?`}
+        description="Its contacts and deals are kept but will no longer be linked to a company. This cannot be undone."
+        confirmLabel="Delete company"
         loading={deleting}
         onConfirm={handleDelete}
-        onCancel={() => setDeleteId(null)}
+        onCancel={() => setDeleteTarget(null)}
       />
     </div>
   );

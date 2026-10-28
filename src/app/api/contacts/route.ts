@@ -2,14 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import {
   requireUser,
-  getOwnershipFilter,
   checkLinkedAccess,
   checkUserExists,
 } from "@/features/auth/server/permissions";
 import { contactSchema } from "@/features/contacts/schemas/contact";
 import { apiSuccess, handleApiError } from "@/lib/api-response";
-import { ContactStatus, ContactSource, Prisma } from "@prisma/client";
-import { enumParam } from "@/lib/pagination";
+import { paginationMeta, parseListParams } from "@/lib/pagination";
+import { buildContactWhere, CONTACT_SORT_FIELDS } from "@/features/contacts/server/queries";
 
 export const dynamic = "force-dynamic";
 
@@ -18,48 +17,21 @@ export async function GET(req: NextRequest) {
     const user = await requireUser();
     const searchParams = req.nextUrl.searchParams;
 
-    const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10));
-    const limit = Math.min(100, Math.max(1, parseInt(searchParams.get("limit") || "10", 10)));
-    const skip = (page - 1) * limit;
-
-    const q = searchParams.get("q")?.trim() || "";
-    const status = enumParam(searchParams.get("status"), Object.values(ContactStatus));
-    const source = enumParam(searchParams.get("source"), Object.values(ContactSource));
-    const ownerIdParam = searchParams.get("ownerId")?.trim();
-    const companyId = searchParams.get("companyId")?.trim();
-    const sortBy = searchParams.get("sortBy") || "createdAt";
-    const sortOrder = searchParams.get("sortOrder") === "asc" ? "asc" : "desc";
-
-    const ownerFilter = getOwnershipFilter(user);
-
-    const where: Prisma.ContactWhereInput = {
-      ...ownerFilter,
-      ...(user.role === "ADMIN" && ownerIdParam ? { ownerId: ownerIdParam } : {}),
-      ...(status ? { status } : {}),
-      ...(source ? { source } : {}),
-      ...(companyId ? { companyId } : {}),
-      ...(q
-        ? {
-            OR: [
-              { firstName: { contains: q, mode: "insensitive" } },
-              { lastName: { contains: q, mode: "insensitive" } },
-              { email: { contains: q, mode: "insensitive" } },
-              { phone: { contains: q, mode: "insensitive" } },
-              { jobTitle: { contains: q, mode: "insensitive" } },
-            ],
-          }
-        : {}),
-    };
-
-    const allowedSortFields = ["firstName", "lastName", "email", "status", "source", "createdAt"];
-    const orderByField = allowedSortFields.includes(sortBy) ? sortBy : "createdAt";
+    const { page, limit, skip, q, sortBy, sortOrder } = parseListParams(
+      searchParams,
+      CONTACT_SORT_FIELDS,
+      "createdAt",
+      "desc"
+    );
+    const where = buildContactWhere(user, searchParams, q);
+    const orderByField = sortBy;
 
     const [items, total] = await Promise.all([
       prisma.contact.findMany({
         where,
         skip,
         take: limit,
-        orderBy: { [orderByField]: sortOrder },
+        orderBy: [{ [orderByField]: sortOrder }, { id: "asc" }],
         include: {
           company: { select: { id: true, name: true, city: true } },
           owner: { select: { id: true, name: true, email: true } },
@@ -69,15 +41,7 @@ export async function GET(req: NextRequest) {
       prisma.contact.count({ where }),
     ]);
 
-    return apiSuccess({
-      data: items,
-      meta: {
-        page,
-        limit,
-        totalItems: total,
-        totalPages: Math.ceil(total / limit),
-      },
-    });
+    return apiSuccess({ data: items, meta: paginationMeta(page, limit, total) });
   } catch (error) {
     if (error instanceof NextResponse) return error;
     return handleApiError(error);

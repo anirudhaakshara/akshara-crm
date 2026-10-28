@@ -16,10 +16,10 @@ export function Field({ label, htmlFor, required, error, children }: FieldProps)
     <div>
       <label htmlFor={htmlFor} className="block text-xs font-semibold mb-1">
         {label}
-        {required && <span className="text-destructive"> *</span>}
+        {required && <span className="text-red-700 dark:text-red-400"> *</span>}
       </label>
       {children}
-      {error && <p className="mt-1 text-[11px] text-destructive">{error}</p>}
+      {error && <p className="mt-1 text-[11px] text-red-700 dark:text-red-400">{error}</p>}
     </div>
   );
 }

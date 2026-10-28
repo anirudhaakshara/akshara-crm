@@ -29,7 +29,7 @@ export function LoginForm() {
       });
 
       if (!res?.ok) {
-        setError(res?.error || "Invalid email or password");
+        setError(res?.error && res.error !== "CredentialsSignin" ? res.error : "Invalid email or password");
         setLoading(false);
         return;
       }
@@ -61,7 +61,7 @@ export function LoginForm() {
       </div>
 
       {error && (
-        <div className="mb-5 flex items-center gap-2.5 rounded-lg border border-destructive/20 bg-destructive/10 p-3 text-xs text-destructive">
+        <div role="alert" className="mb-5 flex items-center gap-2.5 rounded-lg border border-destructive/20 bg-destructive/10 p-3 text-xs text-red-700 dark:text-red-300">
           <AlertCircle className="h-4 w-4 shrink-0" />
           <span>{error}</span>
         </div>
@@ -73,11 +73,12 @@ export function LoginForm() {
             Email Address
           </label>
           <div className="relative">
-            <Mail className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Mail className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" aria-hidden />
             <input
               id="email"
               type="email"
               required
+              autoComplete="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="admin@akshara.test"
@@ -91,11 +92,12 @@ export function LoginForm() {
             Password
           </label>
           <div className="relative">
-            <Lock className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Lock className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" aria-hidden />
             <input
               id="password"
               type="password"
               required
+              autoComplete="current-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="••••••••"

@@ -52,9 +52,9 @@ function Kpi({
     <div className="h-full rounded-xl border border-border bg-card p-4 shadow-sm transition-colors hover:border-primary/40">
       <div className="flex items-center justify-between gap-2">
         <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</span>
-        <Icon className={cn("h-4 w-4", tone === "danger" ? "text-red-600 dark:text-red-400" : "text-muted-foreground")} aria-hidden />
+        <Icon className={cn("h-4 w-4", tone === "danger" ? "text-red-700 dark:text-red-400" : "text-muted-foreground")} aria-hidden />
       </div>
-      <p className={cn("mt-1.5 text-xl font-bold tabular-nums", tone === "danger" ? "text-red-600 dark:text-red-400" : "text-foreground")}>{value}</p>
+      <p className={cn("mt-1.5 text-xl font-bold tabular-nums", tone === "danger" ? "text-red-700 dark:text-red-400" : "text-foreground")}>{value}</p>
       {hint && <p className="mt-0.5 text-[11px] text-muted-foreground">{hint}</p>}
     </div>
   );
@@ -284,7 +284,7 @@ export default function DashboardPage() {
                   <div className="min-w-0 flex-1">
                     <p className="text-xs font-semibold text-foreground">{t.title}</p>
                     <p className="text-[11px] text-muted-foreground">
-                      <span className={cn(t.overdue && "font-semibold text-destructive")}>
+                      <span className={cn(t.overdue && "font-semibold text-red-700 dark:text-red-400")}>
                         {t.overdue ? "Overdue · " : "Due today · "}
                         {formatDate(t.dueDate)}
                       </span>

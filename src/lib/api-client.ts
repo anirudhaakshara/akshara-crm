@@ -57,3 +57,36 @@ export interface Paginated<T> {
   data: T[];
   meta: { page: number; limit: number; totalItems: number; totalPages: number };
 }
+
+/**
+ * Downloads a file from an authenticated GET endpoint. Errors surface as ApiClientError
+ * (so the caller can toast them) instead of navigating the browser to a JSON error page.
+ */
+export async function downloadFile(url: string, fallbackName: string): Promise<{ total: number; exported: number }> {
+  const res = await fetch(url);
+  if (!res.ok) {
+    let message = `Download failed (${res.status})`;
+    try {
+      const json = (await res.json()) as { error?: { message?: string; code?: string } };
+      message = json.error?.message || message;
+    } catch {
+      // not JSON
+    }
+    throw new ApiClientError(message, res.status, "DOWNLOAD_FAILED");
+  }
+  const blob = await res.blob();
+  const disposition = res.headers.get("Content-Disposition") ?? "";
+  const name = /filename="([^"]+)"/.exec(disposition)?.[1] ?? fallbackName;
+  const href = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = href;
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(href), 1000);
+  return {
+    total: Number(res.headers.get("X-Total-Count") ?? 0),
+    exported: Number(res.headers.get("X-Exported-Count") ?? 0),
+  };
+}

@@ -1,11 +1,19 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useState } from "react";
+import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Loader2, X } from "lucide-react";
+import { Select } from "@/components/ui/select";
+import { Field } from "@/components/ui/field";
+import { Modal } from "@/components/ui/modal";
+import { useToast } from "@/components/feedback/Toast";
+import { apiFetch, ApiClientError, errorMessage } from "@/lib/api-client";
+import { companySchema } from "@/features/companies/schemas/company";
+import { INDUSTRIES } from "@/features/companies/constants";
+import type { UserOption } from "@/hooks/useOptions";
 
-interface CompanyData {
+export interface CompanyFormData {
   id?: string;
   name: string;
   industry: string;
@@ -15,209 +23,151 @@ interface CompanyData {
   ownerId?: string;
 }
 
-interface UserOption {
-  id: string;
-  name: string;
-  email: string;
-  role: string;
-}
-
 interface CompanyDialogProps {
   open: boolean;
-  initialData?: CompanyData | null;
+  initialData?: CompanyFormData | null;
   users?: UserOption[];
   isAdmin?: boolean;
   onClose: () => void;
   onSaved: () => void;
 }
 
-export function CompanyDialog({
-  open,
-  initialData,
-  users = [],
-  isAdmin = false,
-  onClose,
-  onSaved,
-}: CompanyDialogProps) {
-  const isEditing = !!initialData?.id;
+const EMPTY = { name: "", industry: "", website: "", city: "", phone: "", ownerId: "" };
 
-  const [name, setName] = useState("");
-  const [industry, setIndustry] = useState("");
-  const [website, setWebsite] = useState("");
-  const [city, setCity] = useState("");
-  const [phone, setPhone] = useState("");
-  const [ownerId, setOwnerId] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+export function CompanyDialog({ open, initialData, users = [], isAdmin = false, onClose, onSaved }: CompanyDialogProps) {
+  const toast = useToast();
+  const isEditing = !!initialData?.id;
+  const [form, setForm] = useState(EMPTY);
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [formError, setFormError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    if (initialData) {
-      setName(initialData.name || "");
-      setIndustry(initialData.industry || "");
-      setWebsite(initialData.website || "");
-      setCity(initialData.city || "");
-      setPhone(initialData.phone || "");
-      setOwnerId(initialData.ownerId || "");
-    } else {
-      setName("");
-      setIndustry("");
-      setWebsite("");
-      setCity("");
-      setPhone("");
-      setOwnerId("");
-    }
-    setError(null);
-  }, [initialData, open]);
+    if (!open) return;
+    setForm(
+      initialData
+        ? {
+            name: initialData.name ?? "",
+            industry: initialData.industry ?? "",
+            website: initialData.website ?? "",
+            city: initialData.city ?? "",
+            phone: initialData.phone ?? "",
+            ownerId: "",
+          }
+        : EMPTY
+    );
+    setErrors({});
+    setFormError(null);
+    // Reset only when the dialog opens or switches record.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, initialData?.id]);
 
-  if (!open) return null;
+  function set<K extends keyof typeof EMPTY>(key: K, value: string) {
+    setForm((f) => ({ ...f, [key]: value }));
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setLoading(true);
-    setError(null);
-
+    const website = form.website.trim();
     const payload = {
-      name: name.trim(),
-      industry: industry.trim(),
-      website: website.trim() || undefined,
-      city: city.trim(),
-      phone: phone.trim() || undefined,
-      ...(isAdmin && ownerId ? { ownerId } : {}),
+      name: form.name.trim(),
+      industry: form.industry.trim(),
+      // Accept "acme.in" as well as "https://acme.in".
+      website: website && !/^https?:\/\//i.test(website) ? `https://${website}` : website,
+      city: form.city.trim(),
+      phone: form.phone.trim(),
+      ...(isAdmin && form.ownerId ? { ownerId: form.ownerId } : {}),
     };
 
-    try {
-      const url = isEditing ? `/api/companies/${initialData?.id}` : "/api/companies";
-      const method = isEditing ? "PATCH" : "POST";
+    const parsed = companySchema.safeParse(payload);
+    if (!parsed.success) {
+      const fieldErrors: Record<string, string> = {};
+      parsed.error.issues.forEach((i) => (fieldErrors[i.path.join(".")] ??= i.message));
+      setErrors(fieldErrors);
+      return;
+    }
 
-      const res = await fetch(url, {
-        method,
-        headers: { "Content-Type": "application/json" },
+    setSaving(true);
+    setErrors({});
+    setFormError(null);
+    try {
+      await apiFetch(isEditing ? `/api/companies/${initialData?.id}` : "/api/companies", {
+        method: isEditing ? "PATCH" : "POST",
         body: JSON.stringify(payload),
       });
-
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error?.message || "Failed to save company");
-      }
-
+      toast.success(isEditing ? "Company updated" : "Company created");
       onSaved();
       onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "An error occurred");
+      if (err instanceof ApiClientError && err.fields) {
+        setErrors(Object.fromEntries(Object.entries(err.fields).map(([k, v]) => [k, v[0]])));
+      }
+      setFormError(errorMessage(err, "Failed to save company"));
     } finally {
-      setLoading(false);
+      setSaving(false);
     }
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="fixed inset-0 bg-background/80 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative w-full max-w-lg rounded-2xl border border-border bg-card p-6 shadow-2xl animate-in fade-in-50 zoom-in-95">
-        <div className="flex items-center justify-between pb-4 border-b border-border">
-          <h2 className="text-base font-bold text-foreground">
-            {isEditing ? "Edit Company" : "Create New Company"}
-          </h2>
-          <button
-            onClick={onClose}
-            className="rounded-lg p-1 text-muted-foreground hover:bg-muted transition-colors"
-          >
-            <X className="h-4 w-4" />
-          </button>
+    <Modal open={open} title={isEditing ? "Edit Company" : "New Company"} onClose={onClose}>
+      {formError && (
+        <div role="alert" className="mt-4 rounded-lg bg-destructive/10 border border-destructive/20 p-3 text-xs text-red-700 dark:text-red-300">
+          {formError}
         </div>
-
-        {error && (
-          <div className="mt-4 rounded-lg bg-destructive/10 border border-destructive/20 p-3 text-xs text-destructive">
-            {error}
-          </div>
-        )}
-
-        <form onSubmit={handleSubmit} className="mt-4 space-y-3.5">
-          <div>
-            <label className="block text-xs font-semibold mb-1">Company Name *</label>
+      )}
+      <form onSubmit={handleSubmit} className="mt-4 space-y-3.5" noValidate>
+        <Field label="Company name" htmlFor="co-name" required error={errors.name}>
+          <Input id="co-name" value={form.name} onChange={(e) => set("name", e.target.value)} placeholder="e.g. Infosys Techworks" />
+        </Field>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <Field label="Industry" htmlFor="co-industry" required error={errors.industry}>
             <Input
-              required
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="e.g. Infosys Techworks"
+              id="co-industry"
+              list="co-industry-options"
+              value={form.industry}
+              onChange={(e) => set("industry", e.target.value)}
+              placeholder="e.g. FinTech"
             />
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-semibold mb-1">Industry *</label>
-              <Input
-                required
-                value={industry}
-                onChange={(e) => setIndustry(e.target.value)}
-                placeholder="e.g. IT Services, FinTech"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold mb-1">City *</label>
-              <Input
-                required
-                value={city}
-                onChange={(e) => setCity(e.target.value)}
-                placeholder="e.g. Bengaluru, Mumbai"
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-semibold mb-1">Website</label>
-              <Input
-                type="url"
-                value={website}
-                onChange={(e) => setWebsite(e.target.value)}
-                placeholder="https://example.com"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold mb-1">Phone</label>
-              <Input
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                placeholder="+91 80 2852 0261"
-              />
-            </div>
-          </div>
-
-          {isAdmin && users.length > 0 && (
-            <div>
-              <label className="block text-xs font-semibold mb-1">Account Owner (Sales Rep)</label>
-              <select
-                value={ownerId}
-                onChange={(e) => setOwnerId(e.target.value)}
-                className="w-full h-9 rounded-lg border border-input bg-background px-3 text-xs focus:outline-none focus:ring-1 focus:ring-ring"
-              >
-                <option value="">Assign to Me / Default</option>
-                {users.map((u) => (
-                  <option key={u.id} value={u.id}>
-                    {u.name} ({u.role})
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-
-          <div className="pt-4 flex items-center justify-end gap-2 border-t border-border">
-            <Button type="button" variant="outline" size="sm" onClick={onClose} disabled={loading}>
-              Cancel
-            </Button>
-            <Button type="submit" size="sm" disabled={loading}>
-              {loading ? (
-                <>
-                  <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                  <span>Saving...</span>
-                </>
-              ) : (
-                <span>{isEditing ? "Save Changes" : "Create Company"}</span>
-              )}
-            </Button>
-          </div>
-        </form>
-      </div>
-    </div>
+            <datalist id="co-industry-options">
+              {INDUSTRIES.map((i) => (
+                <option key={i} value={i} />
+              ))}
+            </datalist>
+          </Field>
+          <Field label="City" htmlFor="co-city" required error={errors.city}>
+            <Input id="co-city" value={form.city} onChange={(e) => set("city", e.target.value)} placeholder="e.g. Bengaluru" />
+          </Field>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <Field label="Website" htmlFor="co-website" error={errors.website}>
+            <Input id="co-website" inputMode="url" value={form.website} onChange={(e) => set("website", e.target.value)} placeholder="example.in" />
+          </Field>
+          <Field label="Phone" htmlFor="co-phone" error={errors.phone}>
+            <Input id="co-phone" type="tel" value={form.phone} onChange={(e) => set("phone", e.target.value)} placeholder="+91 80 2852 0261" />
+          </Field>
+        </div>
+        {isAdmin && users.length > 0 && (
+          <Field label="Account owner" htmlFor="co-owner">
+            <Select id="co-owner" value={form.ownerId} onChange={(e) => set("ownerId", e.target.value)}>
+              <option value="">{isEditing ? "Keep current owner" : "Assign to me"}</option>
+              {users.map((u) => (
+                <option key={u.id} value={u.id}>
+                  {u.name}
+                </option>
+              ))}
+            </Select>
+          </Field>
+        )}
+        <div className="pt-4 flex items-center justify-end gap-2 border-t border-border">
+          <Button type="button" variant="outline" size="sm" onClick={onClose} disabled={saving}>
+            Cancel
+          </Button>
+          <Button type="submit" size="sm" disabled={saving}>
+            {saving && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
+            {isEditing ? "Save Changes" : "Create Company"}
+          </Button>
+        </div>
+      </form>
+    </Modal>
   );
 }

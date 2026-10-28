@@ -11,19 +11,24 @@ export interface AuthenticatedUser {
 }
 
 /**
- * Ensures user is authenticated. Throws 401 response if unauthenticated.
+ * Ensures the caller is signed in and returns their current record (role read from the database).
+ * Throws a 401 response when unauthenticated.
  */
 export async function requireUser(): Promise<AuthenticatedUser> {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
     throw apiError("UNAUTHORIZED", "Authentication required to access this resource", 401);
   }
-  return {
-    id: session.user.id,
-    name: session.user.name,
-    email: session.user.email,
-    role: session.user.role,
-  };
+  // The JWT lives for 30 days; the database is the source of truth for the role, so a demoted
+  // admin loses admin rights immediately rather than when their token expires.
+  const dbUser = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: { id: true, name: true, email: true, role: true },
+  });
+  if (!dbUser) {
+    throw apiError("UNAUTHORIZED", "Your account no longer exists", 401);
+  }
+  return dbUser;
 }
 
 /**
@@ -121,4 +126,15 @@ export async function checkUserExists(userId: string, field: string) {
     });
   }
   return null;
+}
+
+/**
+ * Ensures the caller is an ADMIN. Throws 403 otherwise.
+ */
+export async function requireAdmin(): Promise<AuthenticatedUser> {
+  const user = await requireUser();
+  if (user.role !== "ADMIN") {
+    throw apiError("FORBIDDEN", "Only admins can perform this action", 403);
+  }
+  return user;
 }

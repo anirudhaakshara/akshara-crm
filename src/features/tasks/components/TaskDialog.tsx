@@ -131,7 +131,7 @@ export function TaskDialog({
         </p>
       )}
       {formError && (
-        <div className="mt-4 rounded-lg bg-destructive/10 border border-destructive/20 p-3 text-xs text-destructive">
+        <div className="mt-4 rounded-lg bg-destructive/10 border border-destructive/20 p-3 text-xs text-red-700 dark:text-red-400">
           {formError}
         </div>
       )}

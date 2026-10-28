@@ -16,6 +16,7 @@ import {
   BriefcaseBusiness,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useEffect } from "react";
 
 interface SidebarProps {
   collapsed: boolean;
@@ -33,6 +34,14 @@ export function Sidebar({
   const pathname = usePathname();
   const { data: session } = useSession();
   const isAdmin = session?.user?.role === "ADMIN";
+
+  // Escape closes the mobile drawer.
+  useEffect(() => {
+    if (!mobileOpen) return;
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onCloseMobile?.();
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [mobileOpen, onCloseMobile]);
 
   const navigation = [
     { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
@@ -73,8 +82,11 @@ export function Sidebar({
           </Link>
           <button
             onClick={onToggleCollapse}
+            type="button"
             className="hidden md:flex p-1.5 rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
             title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+            aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+            aria-expanded={!collapsed}
           >
             {collapsed ? (
               <ChevronRight className="h-4 w-4" />
@@ -92,7 +104,7 @@ export function Sidebar({
                 Sales Pipeline
               </p>
             )}
-            <nav className="space-y-1">
+            <nav className="space-y-1" aria-label="Main">
               {navigation.map((item) => {
                 const isActive =
                   pathname === item.href ||
@@ -110,6 +122,8 @@ export function Sidebar({
                         : "text-muted-foreground hover:bg-accent hover:text-foreground"
                     )}
                     title={collapsed ? item.name : undefined}
+                    aria-label={collapsed ? item.name : undefined}
+                    aria-current={isActive ? "page" : undefined}
                   >
                     <Icon
                       className={cn(
@@ -132,7 +146,7 @@ export function Sidebar({
                   Intelligence & Admin
                 </p>
               )}
-              <nav className="space-y-1">
+              <nav className="space-y-1" aria-label="Admin">
                 {adminNavigation.map((item) => {
                   const isActive = pathname.startsWith(item.href);
                   const Icon = item.icon;
@@ -148,6 +162,8 @@ export function Sidebar({
                           : "text-muted-foreground hover:bg-accent hover:text-foreground"
                       )}
                       title={collapsed ? item.name : undefined}
+                      aria-label={collapsed ? item.name : undefined}
+                      aria-current={isActive ? "page" : undefined}
                     >
                       <Icon
                         className={cn(
@@ -169,7 +185,7 @@ export function Sidebar({
       {!collapsed && (
         <div className="p-4 border-t border-border">
           <div className="rounded-lg bg-muted/60 p-3 text-xs">
-            <p className="font-semibold text-foreground">Akshara CRM v0.3</p>
+            <p className="font-semibold text-foreground">Akshara CRM v1.0</p>
             <p className="text-[11px] text-muted-foreground mt-0.5">
               INR Pipeline & ML Engine
             </p>
@@ -197,8 +213,9 @@ export function Sidebar({
           <div
             className="fixed inset-0 bg-background/80 backdrop-blur-sm"
             onClick={onCloseMobile}
+            aria-hidden
           />
-          <div className="relative flex w-72 max-w-[85vw] flex-col bg-card shadow-2xl">
+          <div className="relative flex w-72 max-w-[85vw] flex-col bg-card shadow-2xl" role="dialog" aria-modal="true" aria-label="Navigation">
             {sidebarContent}
           </div>
         </div>

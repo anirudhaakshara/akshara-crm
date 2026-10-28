@@ -161,7 +161,7 @@ export default function ModelInsightsPage() {
             {readiness.scoredOpenDeals} of {readiness.openDeals} open deals scored
           </span>
           {!readiness.enoughData && (
-            <span className="flex items-center gap-1 font-semibold text-amber-600 dark:text-amber-400">
+            <span className="flex items-center gap-1 font-semibold text-amber-800 dark:text-amber-400">
               <AlertTriangle className="h-3.5 w-3.5" />
               Need at least {readiness.minClosedDeals} closed deals to train
             </span>

@@ -15,8 +15,8 @@ interface WinScoreBadgeProps {
 }
 
 const BAND_STYLES: Record<ScoreBand, { label: string; icon: typeof Flame; cls: string }> = {
-  HOT: { label: "Hot", icon: Flame, cls: "border-rose-500/30 bg-rose-500/10 text-rose-600 dark:text-rose-400" },
-  WARM: { label: "Warm", icon: Thermometer, cls: "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400" },
+  HOT: { label: "Hot", icon: Flame, cls: "border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-400" },
+  WARM: { label: "Warm", icon: Thermometer, cls: "border-amber-500/30 bg-amber-500/10 text-amber-800 dark:text-amber-400" },
   COLD: { label: "Cold", icon: Snowflake, cls: "border-sky-500/30 bg-sky-500/10 text-sky-700 dark:text-sky-400" },
 };
 
@@ -119,7 +119,7 @@ export function WinScoreBadge({ stage, winProbability, scoreFactors, className }
                       {positive.map((f) => (
                         <li key={f.group} className="flex justify-between gap-3 text-[11px]">
                           <span>{f.label}</span>
-                          <span className="font-semibold tabular-nums text-emerald-600 dark:text-emerald-400">{formatImpact(f.impact)}</span>
+                          <span className="font-semibold tabular-nums text-emerald-700 dark:text-emerald-400">{formatImpact(f.impact)}</span>
                         </li>
                       ))}
                     </ul>
@@ -134,7 +134,7 @@ export function WinScoreBadge({ stage, winProbability, scoreFactors, className }
                       {negative.map((f) => (
                         <li key={f.group} className="flex justify-between gap-3 text-[11px]">
                           <span>{f.label}</span>
-                          <span className="font-semibold tabular-nums text-rose-600 dark:text-rose-400">{formatImpact(f.impact)}</span>
+                          <span className="font-semibold tabular-nums text-rose-700 dark:text-rose-400">{formatImpact(f.impact)}</span>
                         </li>
                       ))}
                     </ul>

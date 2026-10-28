@@ -5,7 +5,7 @@ import { SessionProvider } from "@/components/session-provider";
 import { ToastProvider } from "@/components/feedback/Toast";
 
 export const metadata: Metadata = {
-  title: "Akshara CRM | Full-Stack CRM with ML Insights",
+  title: { default: "Akshara CRM", template: "%s · Akshara CRM" },
   description: "Modern small business sales CRM with built-in machine learning insights and revenue forecasting",
 };
 

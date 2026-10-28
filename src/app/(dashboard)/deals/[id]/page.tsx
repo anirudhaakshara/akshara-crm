@@ -274,7 +274,7 @@ export default function DealDetailPage() {
             })}
           </div>
           {deal.stage === "LOST" && deal.lostReason && (
-            <p className="mt-3 flex items-start gap-1.5 rounded-lg border border-rose-500/20 bg-rose-500/5 p-2.5 text-xs text-rose-600 dark:text-rose-400">
+            <p className="mt-3 flex items-start gap-1.5 rounded-lg border border-rose-500/20 bg-rose-500/5 p-2.5 text-xs text-rose-700 dark:text-rose-400">
               <AlertCircle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
               <span>
                 <span className="font-semibold">Lost reason:</span> {deal.lostReason}
@@ -329,7 +329,7 @@ export default function DealDetailPage() {
                           <span
                             className={cn(
                               "font-semibold tabular-nums",
-                              f.impact > 0 ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"
+                              f.impact > 0 ? "text-emerald-700 dark:text-emerald-400" : "text-rose-700 dark:text-rose-400"
                             )}
                           >
                             {formatImpact(f.impact)}

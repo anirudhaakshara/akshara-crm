@@ -4,6 +4,7 @@ import React, { useState } from "react";
 import Link from "next/link";
 import {
   CollisionDetection,
+  KeyboardCoordinateGetter,
   DndContext,
   DragEndEvent,
   DragOverlay,
@@ -34,7 +35,18 @@ interface KanbanBoardProps {
   showOwner?: boolean;
 }
 
-function DealCardBody({ deal, showOwner, dragging }: { deal: DealRecord; showOwner?: boolean; dragging?: boolean }) {
+function DealCardBody({
+  deal,
+  showOwner,
+  dragging,
+  handle,
+}: {
+  deal: DealRecord;
+  showOwner?: boolean;
+  dragging?: boolean;
+  /** Keyboard drag handle; a decorative grip is shown when omitted (drag overlay). */
+  handle?: React.ReactNode;
+}) {
   return (
     <div
       className={cn(
@@ -50,7 +62,7 @@ function DealCardBody({ deal, showOwner, dragging }: { deal: DealRecord; showOwn
         >
           {deal.title}
         </Link>
-        <GripVertical className="h-3.5 w-3.5 shrink-0 text-muted-foreground/50" aria-hidden />
+        {handle ?? <GripVertical className="h-3.5 w-3.5 shrink-0 text-muted-foreground/50" aria-hidden />}
       </div>
       <div className="flex items-center justify-between gap-2">
         <span className="text-sm font-bold text-foreground">{formatINR(deal.value)}</span>
@@ -79,20 +91,37 @@ function DealCardBody({ deal, showOwner, dragging }: { deal: DealRecord; showOwn
 }
 
 function DraggableDeal({ deal, showOwner }: { deal: DealRecord; showOwner?: boolean }) {
-  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+  const { attributes, listeners, setNodeRef, setActivatorNodeRef, isDragging } = useDraggable({
     id: deal.id,
     data: { deal },
   });
+  // Pointer/touch can grab the card anywhere; the keyboard uses the grip button only, so Enter on the
+  // title link still opens the deal and the card itself isn't an interactive element wrapping others.
+  const { onKeyDown, ...pointerListeners } = listeners ?? {};
   return (
     <div
       ref={setNodeRef}
-      {...listeners}
-      {...attributes}
-      aria-roledescription="Draggable deal card"
-      aria-label={`${deal.title}, ${formatINR(deal.value)}. Press space to pick up and arrow keys to move between stages.`}
-      className={cn("select-none touch-manipulation cursor-grab active:cursor-grabbing focus:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-xl", isDragging && "opacity-30")}
+      {...pointerListeners}
+      data-deal-card
+      className={cn("select-none touch-manipulation cursor-grab active:cursor-grabbing rounded-xl", isDragging && "opacity-30")}
     >
-      <DealCardBody deal={deal} showOwner={showOwner} />
+      <DealCardBody
+        deal={deal}
+        showOwner={showOwner}
+        handle={
+          <button
+            type="button"
+            ref={setActivatorNodeRef}
+            {...attributes}
+            onKeyDown={onKeyDown as React.KeyboardEventHandler<HTMLButtonElement> | undefined}
+            aria-roledescription="drag handle"
+            aria-label={`Move ${deal.title} (${formatINR(deal.value)}). Press Space, then arrow keys to choose a stage, then Space to drop.`}
+            className="-m-1 shrink-0 rounded p-1 text-muted-foreground/60 hover:bg-muted hover:text-foreground cursor-grab"
+          >
+            <GripVertical className="h-3.5 w-3.5" aria-hidden />
+          </button>
+        }
+      />
     </div>
   );
 }
@@ -153,6 +182,30 @@ const pointerFirst: CollisionDetection = (args) => {
   return hits.length ? hits : rectIntersection(args);
 };
 
+/**
+ * Keyboard dragging: Left/Right jump straight to the neighbouring stage column (instead of nudging
+ * 25px at a time), so moving a deal is Space → arrows → Space.
+ */
+const columnKeyboardCoordinates: KeyboardCoordinateGetter = (event, { context }) => {
+  const dir = event.code === "ArrowRight" ? 1 : event.code === "ArrowLeft" ? -1 : 0;
+  const { collisionRect, droppableRects, droppableContainers, over } = context;
+  if (!dir || !collisionRect) return undefined;
+  event.preventDefault();
+
+  const columns = droppableContainers
+    .getEnabled()
+    .map((c) => ({ id: c.id, rect: droppableRects.get(c.id) }))
+    .filter((c): c is { id: typeof c.id; rect: NonNullable<typeof c.rect> } => !!c.rect)
+    .sort((a, b) => a.rect.left - b.rect.left);
+  const centre = collisionRect.left + collisionRect.width / 2;
+  let current = columns.findIndex((c) => c.id === over?.id);
+  if (current === -1) current = columns.findIndex((c) => centre >= c.rect.left && centre <= c.rect.right);
+  const target = columns[current + dir]?.rect;
+  if (current === -1 || !target) return undefined;
+
+  return { x: target.left + (target.width - collisionRect.width) / 2, y: collisionRect.top };
+};
+
 export function KanbanBoard({ columns, loading, onMove, showOwner }: KanbanBoardProps) {
   const [active, setActive] = useState<DealRecord | null>(null);
 
@@ -161,7 +214,7 @@ export function KanbanBoard({ columns, loading, onMove, showOwner }: KanbanBoard
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
     // Long-press on touch so the board can still be scrolled horizontally.
     useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 8 } }),
-    useSensor(KeyboardSensor)
+    useSensor(KeyboardSensor, { coordinateGetter: columnKeyboardCoordinates })
   );
 
   function handleDragStart(e: DragStartEvent) {

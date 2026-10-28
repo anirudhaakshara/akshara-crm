@@ -6,6 +6,7 @@ import { useSession } from "next-auth/react";
 import { Users, Plus, Edit2, Trash2, Mail, Phone } from "lucide-react";
 import { DataTable, ColumnDef } from "@/components/datatable/DataTable";
 import { Button } from "@/components/ui/button";
+import { ExportButton } from "@/components/ui/export-button";
 import { Badge } from "@/components/ui/badge";
 import { Select } from "@/components/ui/select";
 import { ConfirmDialog } from "@/components/feedback/ConfirmDialog";
@@ -52,6 +53,7 @@ export default function ContactsPage() {
 
   const [rows, setRows] = useState<ContactRecord[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
@@ -84,17 +86,24 @@ export default function ContactsPage() {
       setRows(res.data);
       setTotalPages(res.meta.totalPages);
       setTotalItems(res.meta.totalItems);
+      setLoadError(null);
     } catch (err) {
-      toast.error(errorMessage(err, "Failed to load contacts"));
+      setLoadError(errorMessage(err, "Failed to load contacts"));
     } finally {
       setLoading(false);
     }
-  }, [page, sortField, sortOrder, search, status, source, ownerId, toast]);
+  }, [page, sortField, sortOrder, search, status, source, ownerId]);
 
   useEffect(() => {
     const t = setTimeout(fetchContacts, 250);
     return () => clearTimeout(t);
   }, [fetchContacts]);
+
+  const exportParams = new URLSearchParams({ sortBy: sortField, sortOrder });
+  if (search) exportParams.set("q", search);
+  if (status) exportParams.set("status", status);
+  if (source) exportParams.set("source", source);
+  if (ownerId) exportParams.set("ownerId", ownerId);
 
   function handleSort(field: string) {
     if (sortField === field) setSortOrder(sortOrder === "asc" ? "desc" : "asc");
@@ -219,7 +228,7 @@ export default function ContactsPage() {
             <Edit2 className="h-3.5 w-3.5 text-muted-foreground" />
           </Button>
           <Button variant="ghost" size="icon" aria-label={`Delete ${row.firstName} ${row.lastName}`} onClick={() => setDeleteId(row.id)}>
-            <Trash2 className="h-3.5 w-3.5 text-destructive" />
+            <Trash2 className="h-3.5 w-3.5 text-red-700 dark:text-red-400" />
           </Button>
         </div>
       ),
@@ -257,6 +266,9 @@ export default function ContactsPage() {
         columns={columns}
         data={rows}
         loading={loading}
+        error={loadError}
+        onRetry={fetchContacts}
+        caption="Contacts"
         page={page}
         totalPages={totalPages}
         totalItems={totalItems}
@@ -268,6 +280,7 @@ export default function ContactsPage() {
         sortField={sortField}
         sortOrder={sortOrder}
         onSortChange={handleSort}
+        actionButton={<ExportButton href={`/api/contacts/export?${exportParams}`} fallbackName="contacts.csv" />}
         emptyMessage={search || status || source || ownerId ? "No contacts match these filters." : "No contacts yet — add your first one."}
         filterControls={
           <>

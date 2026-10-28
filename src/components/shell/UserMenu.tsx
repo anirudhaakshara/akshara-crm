@@ -15,8 +15,15 @@ export function UserMenu() {
         setIsOpen(false);
       }
     }
+    function handleKey(event: KeyboardEvent) {
+      if (event.key === "Escape") setIsOpen(false);
+    }
     document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    document.addEventListener("keydown", handleKey);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("keydown", handleKey);
+    };
   }, []);
 
   if (!session?.user) return null;
@@ -34,7 +41,11 @@ export function UserMenu() {
   return (
     <div className="relative" ref={menuRef}>
       <button
+        type="button"
         onClick={() => setIsOpen(!isOpen)}
+        aria-haspopup="menu"
+        aria-expanded={isOpen}
+        aria-label={`Account menu for ${name || "user"}`}
         className="flex items-center gap-2.5 p-1.5 rounded-lg hover:bg-accent text-foreground transition-colors"
       >
         <div className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center font-semibold text-xs border border-primary/20">
@@ -42,13 +53,13 @@ export function UserMenu() {
         </div>
         <div className="hidden sm:flex flex-col text-left">
           <span className="text-xs font-semibold leading-none">{name || "User"}</span>
-          <span className="text-[10px] text-muted-foreground mt-0.5">{role}</span>
+          <span className="text-[10px] text-muted-foreground mt-0.5">{role === "ADMIN" ? "Admin" : "Sales rep"}</span>
         </div>
         <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
       </button>
 
       {isOpen && (
-        <div className="absolute right-0 mt-2 w-56 rounded-xl border bg-card p-1 shadow-lg z-50 text-foreground animate-in fade-in-50 zoom-in-95">
+        <div role="menu" className="absolute right-0 mt-2 w-56 rounded-xl border bg-card p-1 shadow-lg z-50 text-foreground animate-in">
           <div className="px-3 py-2 border-b border-border">
             <p className="text-sm font-semibold truncate">{name}</p>
             <p className="text-xs text-muted-foreground truncate">{email}</p>
@@ -60,8 +71,10 @@ export function UserMenu() {
 
           <div className="p-1">
             <button
+              type="button"
+              role="menuitem"
               onClick={() => signOut({ callbackUrl: "/login" })}
-              className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-destructive hover:bg-destructive/10 transition-colors"
+              className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-red-700 dark:text-red-400 hover:bg-destructive/10 transition-colors"
             >
               <LogOut className="h-3.5 w-3.5" />
               <span>Sign out</span>

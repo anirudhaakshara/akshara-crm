@@ -79,7 +79,7 @@ export function TaskList({ tasks, onChanged, onEdit }: TaskListProps) {
                 {task.title}
               </button>
               <div className="mt-0.5 flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
-                <span className={cn("inline-flex items-center gap-1", overdue && "text-destructive font-semibold")}>
+                <span className={cn("inline-flex items-center gap-1", overdue && "text-red-700 dark:text-red-400 font-semibold")}>
                   {overdue ? <AlertTriangle className="h-3 w-3" /> : <CalendarClock className="h-3 w-3" />}
                   {overdue ? "Overdue · " : "Due "}
                   {formatDate(task.dueDate)}
@@ -100,7 +100,7 @@ export function TaskList({ tasks, onChanged, onEdit }: TaskListProps) {
               onClick={() => setDeleteId(task.id)}
               aria-label="Delete task"
             >
-              <Trash2 className="h-3 w-3 text-destructive" />
+              <Trash2 className="h-3 w-3 text-red-700 dark:text-red-400" />
             </Button>
           </div>
         );

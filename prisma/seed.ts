@@ -149,7 +149,9 @@ async function main() {
   }
 
   await prisma.contact.createMany({ data: contactsToInsert });
-  const contacts = await prisma.contact.findMany();
+  // Explicit order: without it Postgres may return rows in any order, which would change every
+  // deal-contact pairing (and the ML results) between runs.
+  const contacts = await prisma.contact.findMany({ orderBy: { email: "asc" } });
   console.log(`👥 Created ${contacts.length} Contacts.`);
 
   // 5. Generate 200 Closed Deals + 40 Open Deals (240 deals total)

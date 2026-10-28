@@ -85,7 +85,7 @@ export function ActivityTimeline({
             <div
               className={`absolute -left-6 top-0 flex h-6 w-6 items-center justify-center rounded-full border ${style.color}`}
             >
-              <Icon className="h-3 w-3" />
+              <Icon className="h-3 w-3" aria-hidden />
             </div>
 
             {/* Content card */}
@@ -120,7 +120,7 @@ export function ActivityTimeline({
                     title="Delete activity"
                     aria-label="Delete activity"
                   >
-                    <Trash2 className="h-3 w-3 text-destructive" />
+                    <Trash2 className="h-3 w-3 text-red-700 dark:text-red-400" />
                   </Button>
                 )}
               </div>
